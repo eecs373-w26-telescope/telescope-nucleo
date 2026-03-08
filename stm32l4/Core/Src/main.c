@@ -94,8 +94,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    GPIO_PinState pin_state = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13);
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, pin_state);
+    Loop();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
