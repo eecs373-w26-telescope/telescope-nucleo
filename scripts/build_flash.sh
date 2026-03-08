@@ -8,9 +8,7 @@ BLUE="\e[1;34m"
 YELLOW="\e[1;33m"
 NC="\e[0m"
 
-ESW_ROOT="$(dirname "$(dirname "$(realpath "$0")")")"
-TOOLS_DIR="$ESW_ROOT/tools"
-VENV_PATH="$TOOLS_DIR/venv"
+PROJECT_ROOT="$(dirname "$(dirname "$(realpath "$0")")")"
 SRC=""
 PRESET="Debug"
 TARGET_NAME=""
@@ -21,7 +19,6 @@ PORT="${PORT:-swd}"
 FREQ="${FREQ:-8000}"
 RESET="${RESET:-HWrst}"
 SCRIPT_NAME=$(basename "$0")
-CLANGD_SCRIPT="$TOOLS_DIR/scripts/clangd.py"
 
 usage() {
     cat <<EOF
@@ -128,25 +125,5 @@ if [[ "$DO_FLASH" == "true" ]]; then
 fi
 
 popd > /dev/null
-
-# ensure .clangd file exists
-if [[ ! -f "$SRC_DIR/.clangd" ]]; then
-    # create venv if it does not exist
-    if [[ ! -f "${VENV_PATH}/pyvenv.cfg" ]]; then
-        mkdir -p "$BUILD_DIR"
-        if [[ ! -f "${BUILD_DIR}/CMakeCache.txt" ]]; then
-            cmake -S "${TOOLS_DIR}" -B "${BUILD_DIR}"
-        fi
-        cmake --build "${BUILD_DIR}" --target python_env_ready
-        rm -rf "$BUILD_DIR"
-    fi
-
-    # activate venv
-    # shellcheck source=/dev/null
-    source "$VENV_PATH/bin/activate"
-
-    # create the clangd
-    run_step "create .clangd" "$VENV_PATH/bin/python" "$CLANGD_SCRIPT" --src "$SRC_DIR" --ctx "$ESW_ROOT/lib/stm32g4"
-fi
 
 printf "%b\n" "${GREEN}====== success ======${NC}"
