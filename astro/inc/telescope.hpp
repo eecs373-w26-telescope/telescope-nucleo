@@ -1,0 +1,5 @@
+/*
+
+Contains any function declarations for telescope
+
+*/

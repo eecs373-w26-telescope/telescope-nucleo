@@ -8,7 +8,6 @@ State machine implementation
 
 */
 
-#include <state_machine.hpp>
 #include <hw/encoder.hpp>
 #include <hw/gps.hpp>
 #include <hw/raspi.hpp>
@@ -43,23 +42,8 @@ namespace telescope {
 
     [[noreturn]] auto loop() -> void {
         for (;;) {
-            switch (currentState) {
-                case TelescopeState::INIT:
-                    handle_init();
-                    break;
-                case TelescopeState::READY:
-                    handle_ready();
-                    break;
-                case TelescopeState::SEARCH:
-                    handle_search();
-                    break;
-                case TelescopeState::FOUND:
-                    handle_found();
-                    break;
-                default:
-                    // error handling
-                    break;
-            }
+            GPIO_PinState pin_state = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13);
+            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, pin_state);
         }
     }
 
