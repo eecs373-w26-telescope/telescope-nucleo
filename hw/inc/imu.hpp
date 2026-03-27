@@ -1,5 +1,14 @@
-/*
+#pragma once
 
-Provides interface to the Bosch BNO055 9DoF IMU using HAL wrappers
+#include "main.h"
+#include <cstdint>
 
-*/
+namespace imu {
+
+void init(I2C_HandleTypeDef* hi2c);
+
+bool update();
+
+int16_t heading();
+
+} // namespace imu
