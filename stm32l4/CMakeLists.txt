@@ -50,6 +50,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     Core/Src/controller.cpp
     ${CMAKE_SOURCE_DIR}/../hw/src/raspi.cpp
+    ${CMAKE_SOURCE_DIR}/../hw/src/imu.cpp
 )
 
 # Add include paths

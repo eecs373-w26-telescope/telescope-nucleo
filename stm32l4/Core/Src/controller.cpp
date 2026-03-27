@@ -10,6 +10,7 @@ State machine implementation
 
 #include <hw/inc/encoder.hpp>
 #include <hw/inc/gps.hpp>
+#include <hw/inc/imu.hpp>
 #include <hw/inc/raspi.hpp>
 #include <hw/inc/sd_card.hpp>
 #include <hw/inc/touchscreen.hpp>
@@ -18,6 +19,7 @@ State machine implementation
 #include "stm32l4xx.h"
 
 extern "C" UART_HandleTypeDef hlpuart1;
+extern "C" I2C_HandleTypeDef hi2c1;
 
 namespace telescope {
 
@@ -32,8 +34,12 @@ namespace telescope {
     /*
       Initialization sequence
     */
+    constexpr uint32_t IMU_INTERVAL_MS = 100; // 10 Hz
+    uint32_t last_imu_tick = 0;
+
     auto init() -> void {
         raspi::init(&hlpuart1);
+        imu::init(&hi2c1);
     }
 
     bool prev_button_pressed = false;
@@ -45,6 +51,16 @@ namespace telescope {
             // LED reflects raspi connection status
             HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7,
                 raspi::connection_active() ? GPIO_PIN_SET : GPIO_PIN_RESET);
+
+            uint32_t now = HAL_GetTick();
+            if (now - last_imu_tick >= IMU_INTERVAL_MS) {
+                last_imu_tick = now;
+                if (imu::update()) {
+                    ImuPayload payload{};
+                    payload.heading = imu::heading();
+                    raspi::send_imu(payload);
+                }
+            }
 
             // Button press (PC13 is active low on Nucleo) sends debug packet
             bool button_pressed = (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_RESET);
