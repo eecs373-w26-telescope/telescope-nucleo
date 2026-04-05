@@ -52,10 +52,6 @@ namespace telescope {
         for (;;) {
             raspi::process();
 
-            // LED reflects raspi connection status
-            HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1,
-                raspi::connection_active() ? GPIO_PIN_SET : GPIO_PIN_RESET);
-
             uint32_t now = HAL_GetTick();
             if (now - last_imu_tick >= IMU_INTERVAL_MS) {
                 last_imu_tick = now;

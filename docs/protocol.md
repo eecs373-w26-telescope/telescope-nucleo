@@ -1,8 +1,8 @@
 # UART Communication Protocol
 
-LPUART between Nucleo and Raspi at 115200
+USART1 between Feather and Raspi at 115200
 
-- **Nucleo pins**: PC0 (RX), PC1 (TX)
+- **Feather pins**: PB7 (RX), PB6 (TX)
 - **Raspi pins**: GPIO 14 - pin 8 (TXD), GPIO 15 - pin 10 (RXD)
 - **DMA**: TX normal mode, RX circular mode
 

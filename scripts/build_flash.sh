@@ -15,7 +15,7 @@ TARGET_NAME=""
 DO_FLASH=false
 DO_CLEAN=false
 
-PORT="${PORT:-swd}"
+PORT="${PORT:-usb1}"
 FREQ="${FREQ:-8000}"
 RESET="${RESET:-HWrst}"
 SCRIPT_NAME=$(basename "$0")
