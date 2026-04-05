@@ -35,7 +35,9 @@ namespace telescope {
       Initialization sequence
     */
     constexpr uint32_t IMU_INTERVAL_MS = 100; // 10 Hz
+    constexpr uint32_t PING_INTERVAL_MS = 1000; // 1 Hz
     uint32_t last_imu_tick = 0;
+    uint32_t last_ping_tick = 0;
 
     auto init() -> void {
         raspi::init(&huart1);
@@ -53,6 +55,14 @@ namespace telescope {
             raspi::process();
 
             uint32_t now = HAL_GetTick();
+
+            // Periodic ping to blink "DBG" on Raspi
+            if (now - last_ping_tick >= PING_INTERVAL_MS) {
+                last_ping_tick = now;
+                DebugPayload dbg{};
+                raspi::send_debug(dbg);
+            }
+
             if (now - last_imu_tick >= IMU_INTERVAL_MS) {
                 last_imu_tick = now;
                 if (imu::update()) {
