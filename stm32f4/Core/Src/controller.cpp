@@ -52,9 +52,8 @@ namespace telescope {
 
     bool prev_button_pressed = false;
 
-    // TODO: assign debug button pin once soldered, not real rn
-    #define DEBUG_BUTTON_PORT GPIOA
-    #define DEBUG_BUTTON_PIN  GPIO_PIN_0
+    #define DEBUG_BUTTON_PORT GPIOC
+    #define DEBUG_BUTTON_PIN  GPIO_PIN_5
 
     [[noreturn]] auto loop() -> void {
         for (;;) {
@@ -63,12 +62,12 @@ namespace telescope {
 
             uint32_t now = HAL_GetTick();
 
-            // Periodic ping to blink "DBG" on Raspi
-            if (now - last_ping_tick >= PING_INTERVAL_MS) {
-                last_ping_tick = now;
-                DebugPayload dbg{};
-                raspi::send_debug(dbg);
-            }
+            // Periodic ping pong
+            // if (now - last_ping_tick >= PING_INTERVAL_MS) {
+            //     last_ping_tick = now;
+            //     DebugPayload dbg{};
+            //     raspi::send_debug(dbg);
+            // }
 
             if (now - last_imu_tick >= IMU_INTERVAL_MS) {
                 last_imu_tick = now;
