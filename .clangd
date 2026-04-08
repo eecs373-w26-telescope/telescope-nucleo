@@ -1,0 +1,12 @@
+CompileFlags:
+  CompilationDatabase: stm32f4/build/Debug
+  Add:
+    - --target=arm-none-eabi
+    - -isystem/opt/st/stm32cubeclt_1.21.0/GNU-tools-for-STM32/arm-none-eabi/include/c++/14.3.1
+    - -isystem/opt/st/stm32cubeclt_1.21.0/GNU-tools-for-STM32/arm-none-eabi/include/c++/14.3.1/arm-none-eabi/thumb/v7e-m+fp/hard
+    - -isystem/opt/st/stm32cubeclt_1.21.0/GNU-tools-for-STM32/arm-none-eabi/include
+    - -isystem/opt/st/stm32cubeclt_1.21.0/GNU-tools-for-STM32/lib/gcc/arm-none-eabi/14.3.1/include
+  Remove:
+    - -mcpu=*
+    - -mfpu=*
+    - -mfloat-abi=*

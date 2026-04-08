@@ -41,12 +41,12 @@ All logic is 3.3V. Nearly all pins are 5V compliant. All pins can be interrupt i
 
 ## Pin Usage Tracker
 
-- [ ] **A0** (PA4) -
+- [x] **A0** (PA4) - 
 - [x] **A1** (PA5) - SPI1_SCK
 - [x] **A2** (PA6) - SPI1_MISO
 - [x] **A3** (PA7) - SPI1_MOSI
 - [ ] **A4** (PC4) -
-- [ ] **A5** (PC5) -
+- [x] **A5** (PC5) - GPIO - debug button input
 - [ ] **SCK** (PB13) -
 - [ ] **MOSI** (PB15) -
 - [ ] **MISO** (PB14) - 
@@ -58,6 +58,6 @@ All logic is 3.3V. Nearly all pins are 5V compliant. All pins can be interrupt i
 - [x] **D6** (PC6) - USART6_TX - GPS RX
 - [x] **D9** (PB8) - I2C1_SCL
 - [x] **D10** (PB9) - I2C1_SDA
-- [ ] **D11** (PC3) -
-- [ ] **D12** (PC2) -
-- [ ] **D13** (PC1) -
+- [x] **D11** (PC3) - GPIO - SPI CS top
+- [x] **D12** (PC2) - GPIO - SPI CS middle
+- [x] **D13** (PC1) - GPIO - SPI CS bottom
