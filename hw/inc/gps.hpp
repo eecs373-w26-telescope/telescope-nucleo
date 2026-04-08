@@ -25,9 +25,14 @@ public:
 
     double latitude = 0.0;
     double longitude = 0.0;
-    int32_t altitude_mm = 0;
-    uint8_t fix_quality = 0;
-    uint8_t num_satellites = 0;
+    int utc_hours = 0;
+    int utc_minutes = 0;
+    float utc_seconds = 0.0f;
+    bool is_fixed = false;
+
+    int day = 0;
+    int month = 0;
+    int year = 0;
 
 private:
     UART_HandleTypeDef* huart = nullptr;
@@ -39,8 +44,8 @@ private:
     uint16_t line_index = 0;
 
     void process_byte(uint8_t byte);
-    void parse_gga(const char* line);
-    bool is_gga_sentence(const char* line) const;
+    void parse_rmc(const char* line);
+    bool is_rmc_sentence(const char* line) const;
 };
 
 } // namespace GPS
