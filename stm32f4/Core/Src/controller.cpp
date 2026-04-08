@@ -19,6 +19,7 @@ State machine implementation
 #include "stm32f4xx.h"
 
 extern "C" UART_HandleTypeDef huart1;
+extern "C" UART_HandleTypeDef huart6;
 extern "C" I2C_HandleTypeDef hi2c1;
 
 namespace telescope {
@@ -34,25 +35,31 @@ namespace telescope {
     /*
       Initialization sequence
     */
+    GPS::gps gps_sensor;
+
     constexpr uint32_t IMU_INTERVAL_MS = 100; // 10 Hz
+    constexpr uint32_t GPS_INTERVAL_MS = 1000; // 1 Hz
     constexpr uint32_t PING_INTERVAL_MS = 1000; // 1 Hz
     uint32_t last_imu_tick = 0;
+    uint32_t last_gps_tick = 0;
     uint32_t last_ping_tick = 0;
 
     auto init() -> void {
         raspi::init(&huart1);
         imu::init(&hi2c1);
+        gps_sensor.init(&huart6);
     }
 
     bool prev_button_pressed = false;
 
-    // TODO: assign debug button pin once soldered
+    // TODO: assign debug button pin once soldered, not real rn
     #define DEBUG_BUTTON_PORT GPIOA
     #define DEBUG_BUTTON_PIN  GPIO_PIN_0
 
     [[noreturn]] auto loop() -> void {
         for (;;) {
             raspi::process();
+            gps_sensor.process();
 
             uint32_t now = HAL_GetTick();
 
@@ -69,6 +76,13 @@ namespace telescope {
                     ImuPayload payload{};
                     payload.heading = imu::heading();
                     raspi::send_imu(payload);
+                }
+            }
+
+            if (now - last_gps_tick >= GPS_INTERVAL_MS) {
+                last_gps_tick = now;
+                if (gps_sensor.has_fix()) {
+                    raspi::send_gps(gps_sensor.payload());
                 }
             }
 
@@ -105,6 +119,9 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef* huart) {
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef* huart, uint16_t Size) {
     if (huart->Instance == USART1) {
         raspi::rx_event_callback(Size);
+    }
+    if (huart->Instance == USART6) {
+        telescope::gps_sensor.rx_event_callback(Size);
     }
 }
 
