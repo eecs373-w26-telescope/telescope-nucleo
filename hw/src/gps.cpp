@@ -40,9 +40,9 @@ void gps::process_byte(uint8_t byte) {
 
     if (c == '\n') {
         line_buf[line_index] = '\0';
-        if (is_rmc_sentence(line_buf)) {
+        if (is_rmc(line_buf)) {
             parse_rmc(line_buf);
-        } else if (is_gga_sentence(line_buf)) {
+        } else if (is_gga(line_buf)) {
             parse_gga(line_buf);
         }
         line_index = 0;
@@ -54,7 +54,7 @@ void gps::process_byte(uint8_t byte) {
     }
 }
 
-bool gps::is_rmc_sentence(const char* line) const {
+bool gps::is_rmc(const char* line) const {
     return (std::strncmp(line, "$GPRMC", 6) == 0 ||
             std::strncmp(line, "$GNRMC", 6) == 0);
 }
@@ -69,7 +69,7 @@ void gps::parse_rmc(const char* line) {
         return;
     }
 
-    // $GNRMC,hhmmss.ss,status,lat,N/S,lon,E/W,speed,course,ddmmyy,...
+    // $GNRMC,hhmmss.ss,status,lat,N/S,lon,E/W,speed,course,ddmmyy
     char utc_str[15] = {0};
     char status_str[3] = {0};
     char lat_str[15] = {0};
@@ -92,7 +92,7 @@ void gps::parse_rmc(const char* line) {
         }
 
         switch (field_idx) {
-            case 0: break; // $GNRMC
+            case 0: break;
             case 1: strncpy(utc_str, start, sizeof(utc_str)-1); break;
             case 2: strncpy(status_str, start, sizeof(status_str)-1); break;
             case 3: strncpy(lat_str, start, sizeof(lat_str)-1); break;
@@ -120,7 +120,7 @@ void gps::parse_rmc(const char* line) {
         utc_seconds = atof(&utc_str[4]);
     }
 
-    is_fixed = (status_str[0] == 'A');
+    fix = (status_str[0] == 'A');
 
     if (strlen(lat_str) > 0 && strlen(lon_str) > 0) {
         double raw_lat = atof(lat_str);
@@ -146,7 +146,7 @@ void gps::parse_rmc(const char* line) {
     }
 }
 
-bool gps::is_gga_sentence(const char* line) const {
+bool gps::is_gga(const char* line) const {
     return (std::strncmp(line, "$GPGGA", 6) == 0 ||
             std::strncmp(line, "$GNGGA", 6) == 0);
 }
@@ -181,7 +181,7 @@ void gps::parse_gga(const char* line) {
 }
 
 bool gps::has_fix() const {
-    return is_fixed;
+    return fix;
 }
 
 GpsPayload gps::payload() const {

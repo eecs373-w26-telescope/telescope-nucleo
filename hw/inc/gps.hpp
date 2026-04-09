@@ -28,7 +28,7 @@ public:
     int utc_hours = 0;
     int utc_minutes = 0;
     float utc_seconds = 0.0f;
-    bool is_fixed = false;
+    bool fix = false;
 
     int day = 0;
     int month = 0;
@@ -48,8 +48,8 @@ private:
     void process_byte(uint8_t byte);
     void parse_rmc(const char* line);
     void parse_gga(const char* line);
-    bool is_rmc_sentence(const char* line) const;
-    bool is_gga_sentence(const char* line) const;
+    bool is_rmc(const char* line) const;
+    bool is_gga(const char* line) const;
 };
 
 } // namespace GPS
