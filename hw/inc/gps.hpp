@@ -34,6 +34,8 @@ public:
     int month = 0;
     int year = 0;
 
+    uint8_t num_satellites = 0;
+
 private:
     UART_HandleTypeDef* huart = nullptr;
 
@@ -45,7 +47,9 @@ private:
 
     void process_byte(uint8_t byte);
     void parse_rmc(const char* line);
+    void parse_gga(const char* line);
     bool is_rmc_sentence(const char* line) const;
+    bool is_gga_sentence(const char* line) const;
 };
 
 } // namespace GPS

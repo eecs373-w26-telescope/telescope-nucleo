@@ -31,7 +31,7 @@ Offset  Size  Field
 
 | ID   | Name               | Payload | Rate     |
 |------|--------------------|---------|----------|
-| 0x01 | PACKET_GPS         | 14B     | 1 Hz     |
+| 0x01 | PACKET_GPS         | 9B      | 1 Hz     |
 | 0x02 | PACKET_ENCODER     | 12B     | 50 Hz    |
 | 0x03 | PACKET_TOUCH_EVENT | 5B      | On event |
 | 0x04 | PACKET_IMU         | 16B     | 50 Hz    |
@@ -54,17 +54,15 @@ Offset  Size  Field
 
 `#pragma pack(push, 1)` to tell compiler not to add padding
 
-### GpsPayload (0x01, 14 bytes)
+### GpsPayload (0x01, 9 bytes)
 
-Adafruit PA1616S Ultimate GPS via UART.
+Adafruit PA1616S Ultimate GPS via UART. Position from RMC, satellite count from GGA.
 
 ```
 Offset  Type     Field           Notes
 0       int32_t  latitude_e7     degrees * 10^7
 4       int32_t  longitude_e7    degrees * 10^7
-8       int32_t  altitude_mm     millimeters
-12      uint8_t  fix_quality     0=none, 1=GPS, 2=DGPS
-13      uint8_t  num_satellites
+8       uint8_t  num_satellites  from GGA sentence
 ```
 
 ### EncoderPayload (0x02, 12 bytes)
@@ -168,10 +166,10 @@ Offset  Type       Field   Notes
 
 | Stream          | Frame Size | Rate   | Bytes/sec |
 |-----------------|-----------|--------|-----------|
-| GPS             | 20B       | 1 Hz   | 20        |
+| GPS             | 15B       | 1 Hz   | 15        |
 | Encoder         | 18B       | 50 Hz  | 900       |
 | IMU             | 22B       | 50 Hz  | 1,100     |
 | State sync      | 10B       | 5 Hz   | 50        |
-| **Total**       |           |        | **2,070** |
+| **Total**       |           |        | **2,065** |
 
 18% utilization. Plenty of headroom.

@@ -42,6 +42,8 @@ void gps::process_byte(uint8_t byte) {
         line_buf[line_index] = '\0';
         if (is_rmc_sentence(line_buf)) {
             parse_rmc(line_buf);
+        } else if (is_gga_sentence(line_buf)) {
+            parse_gga(line_buf);
         }
         line_index = 0;
         return;
@@ -144,6 +146,40 @@ void gps::parse_rmc(const char* line) {
     }
 }
 
+bool gps::is_gga_sentence(const char* line) const {
+    return (std::strncmp(line, "$GPGGA", 6) == 0 ||
+            std::strncmp(line, "$GNGGA", 6) == 0);
+}
+
+void gps::parse_gga(const char* line) {
+    char buffer[GPS_BUFFER_SIZE];
+    strncpy(buffer, line, sizeof(buffer) - 1);
+    buffer[sizeof(buffer) - 1] = '\0';
+
+    // $GNGGA,hhmmss.ss,lat,N/S,lon,E/W,fix,sats,hdop,alt,M,geoid,M,...
+    char* start = buffer;
+    char* end;
+    int field_idx = 0;
+
+    while (start != nullptr && *start != '\0') {
+        end = strchr(start, ',');
+        if (end != nullptr) {
+            *end = '\0';
+        }
+
+        if (field_idx == 7) {
+            num_satellites = static_cast<uint8_t>(atoi(start));
+        }
+
+        if (end != nullptr) {
+            start = end + 1;
+        } else {
+            start = nullptr;
+        }
+        field_idx++;
+    }
+}
+
 bool gps::has_fix() const {
     return is_fixed;
 }
@@ -152,9 +188,7 @@ GpsPayload gps::payload() const {
     GpsPayload p{};
     p.latitude_e7 = static_cast<int32_t>(latitude * 1e7);
     p.longitude_e7 = static_cast<int32_t>(longitude * 1e7);
-    p.altitude_mm = 0;
-    p.fix_quality = is_fixed ? 1 : 0;
-    p.num_satellites = 0;
+    p.num_satellites = num_satellites;
     return p;
 }
 
