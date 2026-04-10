@@ -17,8 +17,11 @@ State machine implementation
 
 #include "main.h"
 #include "stm32f4xx.h"
+#include "stm32f4xx_hal_uart.h"
+#include <cstdio>
 
 extern "C" UART_HandleTypeDef huart1;
+extern "C" UART_HandleTypeDef huart3;
 extern "C" UART_HandleTypeDef huart6;
 extern "C" I2C_HandleTypeDef hi2c1;
 
@@ -40,11 +43,16 @@ namespace telescope {
     constexpr uint32_t IMU_INTERVAL_MS = 100; // 10 Hz
     constexpr uint32_t GPS_INTERVAL_MS = 1000; // 1 Hz
     constexpr uint32_t PING_INTERVAL_MS = 1000; // 1 Hz
+    constexpr uint32_t SERIAL_INTERVAL_MS = 1000; // 1 Hz
     uint32_t last_imu_tick = 0;
     uint32_t last_gps_tick = 0;
     uint32_t last_ping_tick = 0;
+    uint32_t last_serial_tick = 0;
 
     auto init() -> void {
+        const char* msg = "telescope init\r\n";
+        HAL_UART_Transmit(&huart3, reinterpret_cast<const uint8_t*>(msg), 16, 100);
+
         raspi::init(&huart1);
         imu::init(&hi2c1);
         gps_sensor.init(&huart6);
@@ -83,6 +91,19 @@ namespace telescope {
                 if (gps_sensor.has_fix()) {
                     raspi::send_gps(gps_sensor.payload());
                 }
+            }
+
+            if (now - last_serial_tick >= SERIAL_INTERVAL_MS) {
+                last_serial_tick = now;
+                bool imu_ok = imu::update();
+                char buf[64];
+                int len = snprintf(buf, sizeof(buf), "IMU: %s  HDG: %.1f  GPS: %s  SAT: %d\r\n",
+                                   imu_ok ? "OK" : "FAIL",
+                                   static_cast<float>(imu::heading()) / 16.0f,
+                                   gps_sensor.has_fix() ? "FIX" : "---",
+                                   gps_sensor.num_satellites);
+                HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(buf),
+                                  static_cast<uint16_t>(len), 100);
             }
 
             // Button press sends debug packet
