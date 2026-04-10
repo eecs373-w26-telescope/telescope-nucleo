@@ -82,6 +82,7 @@ namespace telescope {
                 if (imu::update()) {
                     ImuPayload payload{};
                     payload.heading = imu::heading();
+                    payload.calibration = imu::calibration();
                     raspi::send_imu(payload);
                 }
             }
@@ -96,10 +97,14 @@ namespace telescope {
             if (now - last_serial_tick >= SERIAL_INTERVAL_MS) {
                 last_serial_tick = now;
                 bool imu_ok = imu::update();
-                char buf[64];
-                int len = snprintf(buf, sizeof(buf), "IMU: %s  HDG: %.1f  GPS: %s  SAT: %d\r\n",
+                uint8_t cal = imu::calibration();
+                char buf[80];
+                int len = snprintf(buf, sizeof(buf),
+                                   "IMU: %s  HDG: %.1f  CAL: S%d G%d A%d M%d  GPS: %s  SAT: %d\r\n",
                                    imu_ok ? "OK" : "FAIL",
                                    static_cast<float>(imu::heading()) / 16.0f,
+                                   (cal >> 6) & 3, (cal >> 4) & 3,
+                                   (cal >> 2) & 3, cal & 3,
                                    gps_sensor.has_fix() ? "FIX" : "---",
                                    gps_sensor.num_satellites);
                 HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(buf),
