@@ -24,6 +24,7 @@ extern "C" UART_HandleTypeDef huart1;
 extern "C" UART_HandleTypeDef huart3;
 extern "C" UART_HandleTypeDef huart6;
 extern "C" I2C_HandleTypeDef hi2c1;
+extern "C" SPI_HandleTypeDef hspi1;
 
 namespace telescope {
 
@@ -34,6 +35,10 @@ namespace telescope {
     /*
         SPI
     */
+    #define ENCODER_YAW_CS_PORT GPIOC
+    #define ENCODER_YAW_CS_PIN  GPIO_PIN_2  // D12 (PC2)
+
+    ENCODER::Encoder* yaw_encoder = nullptr;
 
     /*
       Initialization sequence
@@ -43,10 +48,12 @@ namespace telescope {
     constexpr uint32_t IMU_INTERVAL_MS = 100; // 10 Hz
     constexpr uint32_t GPS_INTERVAL_MS = 1000; // 1 Hz
     constexpr uint32_t PING_INTERVAL_MS = 1000; // 1 Hz
+    constexpr uint32_t ENCODER_INTERVAL_MS = 100; // 10 Hz
     constexpr uint32_t SERIAL_INTERVAL_MS = 1000; // 1 Hz
     uint32_t last_imu_tick = 0;
     uint32_t last_gps_tick = 0;
     uint32_t last_ping_tick = 0;
+    uint32_t last_encoder_tick = 0;
     uint32_t last_serial_tick = 0;
 
     auto init() -> void {
@@ -56,12 +63,16 @@ namespace telescope {
         raspi::init(&huart1);
         imu::init(&hi2c1);
         gps_sensor.init(&huart6);
+
+        static ENCODER::Encoder yaw_enc(&hspi1, ENCODER_YAW_CS_PORT, ENCODER_YAW_CS_PIN);
+        yaw_encoder = &yaw_enc;
+        yaw_encoder->clearError();
     }
 
     bool prev_button_pressed = false;
 
     #define DEBUG_BUTTON_PORT GPIOC
-    #define DEBUG_BUTTON_PIN  GPIO_PIN_5
+    #define DEBUG_BUTTON_PIN  GPIO_PIN_4
 
     [[noreturn]] auto loop() -> void {
         for (;;) {
@@ -94,19 +105,32 @@ namespace telescope {
                 }
             }
 
+            if (now - last_encoder_tick >= ENCODER_INTERVAL_MS) {
+                last_encoder_tick = now;
+                uint16_t yaw_raw = 0;
+                if (yaw_encoder->readRawAngle(yaw_raw) == HAL_OK) {
+                    EncoderPayload payload{};
+                    payload.azimuth_raw = yaw_raw;
+                    raspi::send_encoder(payload);
+                }
+            }
+
             if (now - last_serial_tick >= SERIAL_INTERVAL_MS) {
                 last_serial_tick = now;
                 bool imu_ok = imu::update();
                 uint8_t cal = imu::calibration();
-                char buf[80];
+                float yaw_deg = 0.0f;
+                yaw_encoder->readAngleDeg(yaw_deg);
+                char buf[100];
                 int len = snprintf(buf, sizeof(buf),
-                                   "IMU: %s  HDG: %.1f  CAL: S%d G%d A%d M%d  GPS: %s  SAT: %d\r\n",
+                                   "IMU: %s  HDG: %.1f  CAL: S%d G%d A%d M%d  GPS: %s  SAT: %d  YAW: %.1f\r\n",
                                    imu_ok ? "OK" : "FAIL",
                                    static_cast<float>(imu::heading()) / 16.0f,
                                    (cal >> 6) & 3, (cal >> 4) & 3,
                                    (cal >> 2) & 3, cal & 3,
                                    gps_sensor.has_fix() ? "FIX" : "---",
-                                   gps_sensor.num_satellites);
+                                   gps_sensor.num_satellites,
+                                   static_cast<double>(yaw_deg));
                 HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(buf),
                                   static_cast<uint16_t>(len), 100);
             }
