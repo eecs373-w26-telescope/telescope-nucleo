@@ -29,9 +29,15 @@ bool read_regs(uint8_t reg, uint8_t* buf, uint16_t len) {
 void init(I2C_HandleTypeDef* hi2c) {
     i2c = hi2c;
 
-    // NDOF mode
+    HAL_Delay(700); // BNO055 boot time
+
+    // ensure CONFIG mode first
+    write_reg(OPR_MODE, 0x00);
+    HAL_Delay(30);
+
+    // switch to NDOF
     write_reg(OPR_MODE, 0x0C);
-    HAL_Delay(50);
+    HAL_Delay(30);
 }
 
 bool update() {
