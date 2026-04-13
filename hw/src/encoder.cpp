@@ -13,16 +13,16 @@ namespace ENCODER
 
     //Constructor
     Encoder::Encoder(SPI_HandleTypeDef* hspi, GPIO_TypeDef* csPort, uint16_t csPin)
-    : hspi_(hspi), csPort_(csPort), csPin_(csPin){}
+    : hspi(hspi), csPort(csPort), csPin(csPin){}
 
     // Drive CS Low
     void Encoder::csLow(){
-        HAL_GPIO_WritePin(csPort_, csPin_, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(csPort, csPin, GPIO_PIN_RESET);
     }
 
     //Drive CS High
     void Encoder::csHigh(){
-        HAL_GPIO_WritePin(csPort_, csPin_, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(csPort, csPin, GPIO_PIN_SET);
     }
     //Generate the Parity bit
     uint8_t Encoder::evenParity15(uint16_t value){
@@ -60,7 +60,7 @@ namespace ENCODER
         tx[1] = static_cast<uint8_t>(txword & 0xFF);
 
         csLow();
-        HAL_StatusTypeDef status = HAL_SPI_TransmitReceive(hspi_, tx, rx, 2, HAL_MAX_DELAY);
+        HAL_StatusTypeDef status = HAL_SPI_TransmitReceive(hspi, tx, rx, 2, HAL_MAX_DELAY);
         csHigh();
 
         if (status != HAL_OK){

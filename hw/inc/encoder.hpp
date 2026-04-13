@@ -15,9 +15,9 @@ namespace ENCODER
             HAL_StatusTypeDef clearError();
 
         private:
-            SPI_HandleTypeDef* hspi_;
-            GPIO_TypeDef* csPort_;
-            uint16_t csPin_;
+            SPI_HandleTypeDef* hspi;
+            GPIO_TypeDef* csPort;
+            uint16_t csPin;
 
             void csLow();
             void csHigh();

@@ -9,6 +9,7 @@ State machine implementation
 */
 
 #include <hw/inc/encoder.hpp>
+#include <hw/inc/filter.hpp>
 #include <hw/inc/gps.hpp>
 #include <hw/inc/imu.hpp>
 #include <hw/inc/raspi.hpp>
@@ -35,10 +36,20 @@ namespace telescope {
     /*
         SPI
     */
-    #define ENCODER_YAW_CS_PORT GPIOC
-    #define ENCODER_YAW_CS_PIN  GPIO_PIN_2  // D12 (PC2)
+    #define ENCODER_YAW_CS_PORT   GPIOC
+    #define ENCODER_YAW_CS_PIN    GPIO_PIN_2  // D12 (PC2)
+    #define ENCODER_PITCH_CS_PORT GPIOC
+    #define ENCODER_PITCH_CS_PIN  GPIO_PIN_1  // D13 (PC1)
 
     ENCODER::Encoder* yaw_encoder = nullptr;
+    ENCODER::Encoder* pitch_encoder = nullptr;
+
+    // BNO055 heading: int16_t units of 1/16 deg, full circle = 360 * 16 = 5760
+    // AS5048A raw: uint16_t 14-bit, full circle = 16384
+    constexpr std::size_t FILTER_WINDOW = 8;
+    filter::Filter<int16_t,  FILTER_WINDOW> imu_filter{5760};
+    filter::Filter<uint16_t, FILTER_WINDOW> yaw_filter{16384};
+    filter::Filter<uint16_t, FILTER_WINDOW> pitch_filter{16384};
 
     /*
       Initialization sequence
@@ -47,7 +58,6 @@ namespace telescope {
 
     constexpr uint32_t IMU_INTERVAL_MS = 100; // 10 Hz
     constexpr uint32_t GPS_INTERVAL_MS = 1000; // 1 Hz
-    constexpr uint32_t PING_INTERVAL_MS = 1000; // 1 Hz
     constexpr uint32_t ENCODER_INTERVAL_MS = 100; // 10 Hz
     constexpr uint32_t SERIAL_INTERVAL_MS = 1000; // 1 Hz
     uint32_t last_imu_tick = 0;
@@ -67,6 +77,10 @@ namespace telescope {
         static ENCODER::Encoder yaw_enc(&hspi1, ENCODER_YAW_CS_PORT, ENCODER_YAW_CS_PIN);
         yaw_encoder = &yaw_enc;
         yaw_encoder->clearError();
+
+        static ENCODER::Encoder pitch_enc(&hspi1, ENCODER_PITCH_CS_PORT, ENCODER_PITCH_CS_PIN);
+        pitch_encoder = &pitch_enc;
+        pitch_encoder->clearError();
     }
 
     bool prev_button_pressed = false;
@@ -81,18 +95,11 @@ namespace telescope {
 
             uint32_t now = HAL_GetTick();
 
-            // Periodic ping pong
-            // if (now - last_ping_tick >= PING_INTERVAL_MS) {
-            //     last_ping_tick = now;
-            //     DebugPayload dbg{};
-            //     raspi::send_debug(dbg);
-            // }
-
             if (now - last_imu_tick >= IMU_INTERVAL_MS) {
                 last_imu_tick = now;
                 if (imu::update()) {
                     ImuPayload payload{};
-                    payload.heading = imu::heading();
+                    payload.heading = imu_filter.update(imu::heading());
                     payload.calibration = imu::calibration();
                     raspi::send_imu(payload);
                 }
@@ -107,12 +114,13 @@ namespace telescope {
 
             if (now - last_encoder_tick >= ENCODER_INTERVAL_MS) {
                 last_encoder_tick = now;
-                uint16_t yaw_raw = 0;
-                if (yaw_encoder->readRawAngle(yaw_raw) == HAL_OK) {
-                    EncoderPayload payload{};
-                    payload.azimuth_raw = yaw_raw;
-                    raspi::send_encoder(payload);
-                }
+                EncoderPayload payload{};
+                uint16_t raw = 0;
+                bool yaw_ok = (yaw_encoder->readRawAngle(raw) == HAL_OK);
+                if (yaw_ok) payload.yaw_raw = yaw_filter.update(raw);
+                bool pitch_ok = (pitch_encoder->readRawAngle(raw) == HAL_OK);
+                if (pitch_ok) payload.pitch_raw = pitch_filter.update(raw);
+                if (yaw_ok || pitch_ok) raspi::send_encoder(payload);
             }
 
             if (now - last_serial_tick >= SERIAL_INTERVAL_MS) {
@@ -120,17 +128,20 @@ namespace telescope {
                 bool imu_ok = imu::update();
                 uint8_t cal = imu::calibration();
                 float yaw_deg = 0.0f;
+                float pitch_deg = 0.0f;
                 yaw_encoder->readAngleDeg(yaw_deg);
-                char buf[100];
+                pitch_encoder->readAngleDeg(pitch_deg);
+                char buf[120];
                 int len = snprintf(buf, sizeof(buf),
-                                   "IMU: %s  HDG: %.1f  CAL: S%d G%d A%d M%d  GPS: %s  SAT: %d  YAW: %.1f\r\n",
+                                   "IMU: %s  HDG: %.1f  CAL: S%d G%d A%d M%d  GPS: %s  SAT: %d  YAW: %.1f  PIT: %.1f\r\n",
                                    imu_ok ? "OK" : "FAIL",
                                    static_cast<float>(imu::heading()) / 16.0f,
                                    (cal >> 6) & 3, (cal >> 4) & 3,
                                    (cal >> 2) & 3, cal & 3,
                                    gps_sensor.has_fix() ? "FIX" : "---",
                                    gps_sensor.num_satellites,
-                                   static_cast<double>(yaw_deg));
+                                   static_cast<double>(yaw_deg),
+                                   static_cast<double>(pitch_deg));
                 HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(buf),
                                   static_cast<uint16_t>(len), 100);
             }
