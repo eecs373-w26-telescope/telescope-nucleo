@@ -4,20 +4,23 @@
 #include <stdint.h>
 #include "stm32f4xx_hal.h"
 
-namespace ENCODER
+namespace encoder
 {
     class Encoder{
         public:
-            Encoder(SPI_HandleTypeDef* hspi, GPIO_TypeDef* csPort,  uint16_t csPin);
+            Encoder(SPI_HandleTypeDef* hspi, GPIO_TypeDef* csPort,  uint16_t csPin, uint16_t offset = 0);
 
             HAL_StatusTypeDef readRawAngle(uint16_t& rawAngle);
             HAL_StatusTypeDef readAngleDeg(float& angleDeg);
             HAL_StatusTypeDef clearError();
 
+            void setOffset(uint16_t offset);
+
         private:
             SPI_HandleTypeDef* hspi;
             GPIO_TypeDef* csPort;
             uint16_t csPin;
+            uint16_t offset;
 
             void csLow();
             void csHigh();
@@ -30,4 +33,4 @@ namespace ENCODER
             HAL_StatusTypeDef readRegister(uint16_t addr, uint16_t& dataOut);
 
     };
-} // namespace ENCODER
+} // namespace encoder

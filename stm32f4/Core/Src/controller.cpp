@@ -41,8 +41,17 @@ namespace telescope {
     #define ENCODER_PITCH_CS_PORT GPIOC
     #define ENCODER_PITCH_CS_PIN  GPIO_PIN_1  // D13 (PC1)
 
-    ENCODER::Encoder* yaw_encoder = nullptr;
-    ENCODER::Encoder* pitch_encoder = nullptr;
+    constexpr uint16_t ENCODER_FULL = 16384;
+    constexpr uint16_t deg_to_raw(float deg) {
+        return static_cast<uint16_t>((deg / 360.0f) * ENCODER_FULL) % ENCODER_FULL;
+    }
+
+    // OFFSET HEADING HERE
+    constexpr uint16_t YAW_OFFSET   = deg_to_raw(0.0f);
+    constexpr uint16_t PITCH_OFFSET = deg_to_raw(0.0f);
+
+    encoder::Encoder* yaw_encoder = nullptr;
+    encoder::Encoder* pitch_encoder = nullptr;
 
     // BNO055 heading: int16_t units of 1/16 deg, full circle = 360 * 16 = 5760
     // AS5048A raw: uint16_t 14-bit, full circle = 16384
@@ -74,11 +83,11 @@ namespace telescope {
         imu::init(&hi2c1);
         gps_sensor.init(&huart6);
 
-        static ENCODER::Encoder yaw_enc(&hspi1, ENCODER_YAW_CS_PORT, ENCODER_YAW_CS_PIN);
+        static encoder::Encoder yaw_enc(&hspi1, ENCODER_YAW_CS_PORT, ENCODER_YAW_CS_PIN, YAW_OFFSET);
         yaw_encoder = &yaw_enc;
         yaw_encoder->clearError();
 
-        static ENCODER::Encoder pitch_enc(&hspi1, ENCODER_PITCH_CS_PORT, ENCODER_PITCH_CS_PIN);
+        static encoder::Encoder pitch_enc(&hspi1, ENCODER_PITCH_CS_PORT, ENCODER_PITCH_CS_PIN, PITCH_OFFSET);
         pitch_encoder = &pitch_enc;
         pitch_encoder->clearError();
     }

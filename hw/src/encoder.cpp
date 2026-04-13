@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace ENCODER
+namespace encoder
 {
     static constexpr uint16_t AS5048_NOP       = 0x0000;
     static constexpr uint16_t AS5048_CLRERR    = 0x0001;
@@ -11,9 +11,15 @@ namespace ENCODER
     static constexpr uint16_t AS5048_MAG       = 0x3FFE;
     static constexpr uint16_t AS5048_ANGLE     = 0x3FFF;
 
+    static constexpr uint16_t AS5048_FULL = 16384;
+
     //Constructor
-    Encoder::Encoder(SPI_HandleTypeDef* hspi, GPIO_TypeDef* csPort, uint16_t csPin)
-    : hspi(hspi), csPort(csPort), csPin(csPin){}
+    Encoder::Encoder(SPI_HandleTypeDef* hspi, GPIO_TypeDef* csPort, uint16_t csPin, uint16_t offset)
+    : hspi(hspi), csPort(csPort), csPin(csPin), offset(offset){}
+
+    void Encoder::setOffset(uint16_t newOffset){
+        offset = newOffset % AS5048_FULL;
+    }
 
     // Drive CS Low
     void Encoder::csLow(){
@@ -97,7 +103,11 @@ namespace ENCODER
         return HAL_OK;
     }
     HAL_StatusTypeDef Encoder::readRawAngle(uint16_t& rawangle){
-        return readRegister(AS5048_ANGLE, rawangle);
+        uint16_t raw = 0;
+        HAL_StatusTypeDef status = readRegister(AS5048_ANGLE, raw);
+        if (status != HAL_OK) return status;
+        rawangle = (raw + AS5048_FULL - offset) % AS5048_FULL;
+        return HAL_OK;
     }
 
     HAL_StatusTypeDef Encoder::readAngleDeg(float& angleDeg){
@@ -114,4 +124,4 @@ namespace ENCODER
         uint16_t dummy = 0;
         return readRegister(AS5048_CLRERR, dummy);
     }
-} // namespace ENCODER
+} // namespace encoder
