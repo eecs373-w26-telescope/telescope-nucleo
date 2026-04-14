@@ -6,7 +6,6 @@ namespace {
 
 constexpr uint16_t RX_BUF_SIZE = 256;
 constexpr uint16_t TX_BUF_SIZE = 134; // max frame: 4 header + 128 payload + 2 CRC
-constexpr uint32_t CONNECTION_TIMEOUT_MS = 1000;
 
 UART_HandleTypeDef* uart_handle = nullptr;
 
@@ -17,10 +16,6 @@ volatile bool tx_busy = false;
 // RX DMA circular buffer
 uint8_t rx_dma_buf[RX_BUF_SIZE];
 uint16_t rx_read_pos = 0;
-
-// Mirrored state from raspi
-volatile uint8_t current_state = 0;
-volatile uint32_t last_state_sync_tick = 0;
 
 // Lightweight stream decoder (no heap allocation)
 enum class RxState : uint8_t {
@@ -122,26 +117,9 @@ void process_byte(uint8_t byte) {
 }
 
 void dispatch_packet(uint8_t packet_id, const uint8_t* payload, uint8_t length) {
-	switch (packet_id) {
-	case PACKET_STATE_SYNC:
-		if (length >= sizeof(StateSyncPayload)) {
-			StateSyncPayload sync;
-			std::memcpy(&sync, payload, sizeof(sync));
-			current_state = sync.state;
-			last_state_sync_tick = HAL_GetTick();
-		}
-		break;
-
-	case PACKET_DSO_REQUEST:
-		// SD card read and response will be wired in when SD driver is implemented
-		break;
-
-	case PACKET_DEBUG:
-		break;
-
-	default:
-		break;
-	}
+	(void)packet_id;
+	(void)payload;
+	(void)length;
 }
 
 } // anonymous namespace
@@ -150,8 +128,6 @@ void init(UART_HandleTypeDef* huart) {
 	uart_handle = huart;
 	tx_busy = false;
 	rx_read_pos = 0;
-	current_state = 0;
-	last_state_sync_tick = HAL_GetTick();
 	decoder = Decoder{};
 
 	HAL_UARTEx_ReceiveToIdle_DMA(uart_handle, rx_dma_buf, RX_BUF_SIZE);
@@ -201,24 +177,16 @@ bool send_imu(const ImuPayload& p) {
 	return send_packet(PACKET_IMU, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
 }
 
-bool send_touch_event(const TouchEventPayload& p) {
-	return send_packet(PACKET_TOUCH_EVENT, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
+bool send_state_sync(const StateSyncPayload& p) {
+	return send_packet(PACKET_STATE_SYNC, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
 }
 
-bool send_dso_response(const DsoResponsePayload& p) {
-	return send_packet(PACKET_DSO_RESPONSE, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
+bool send_dso_target(const DsoTargetPayload& p) {
+	return send_packet(PACKET_DSO_TARGET, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
 }
 
 bool send_debug(const DebugPayload& p) {
 	return send_packet(PACKET_DEBUG, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
-}
-
-uint8_t mirrored_state() {
-	return current_state;
-}
-
-bool connection_active() {
-	return (HAL_GetTick() - last_state_sync_tick) < CONNECTION_TIMEOUT_MS;
 }
 
 void tx_complete_callback() {

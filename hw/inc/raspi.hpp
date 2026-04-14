@@ -18,13 +18,9 @@ bool send_packet(uint8_t packet_id, const uint8_t* payload, uint8_t length);
 bool send_gps(const GpsPayload& payload);
 bool send_encoder(const EncoderPayload& payload);
 bool send_imu(const ImuPayload& payload);
-bool send_touch_event(const TouchEventPayload& payload);
-bool send_dso_response(const DsoResponsePayload& payload);
+bool send_state_sync(const StateSyncPayload& payload);
+bool send_dso_target(const DsoTargetPayload& payload);
 bool send_debug(const DebugPayload& payload);
-
-// Current mirrored state from raspi (updated by STATE_SYNC packets)
-uint8_t mirrored_state();
-bool    connection_active();
 
 // Called by HAL from ISR context
 void tx_complete_callback();

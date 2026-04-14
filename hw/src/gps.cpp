@@ -189,6 +189,12 @@ GpsPayload gps::payload() const {
     p.latitude_e7 = static_cast<int32_t>(latitude * 1e7);
     p.longitude_e7 = static_cast<int32_t>(longitude * 1e7);
     p.num_satellites = num_satellites;
+    p.utc_hour   = static_cast<uint8_t>(utc_hours);
+    p.utc_minute = static_cast<uint8_t>(utc_minutes);
+    p.utc_second = static_cast<uint8_t>(utc_seconds);
+    p.utc_day    = static_cast<uint8_t>(day);
+    p.utc_month  = static_cast<uint8_t>(month);
+    p.utc_year   = static_cast<uint16_t>(year);
     return p;
 }
 
