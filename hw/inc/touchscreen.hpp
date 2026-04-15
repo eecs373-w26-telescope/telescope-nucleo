@@ -3,7 +3,7 @@
 #include <cstdint>
 #include "stdlib.h"
 
-namespace telescope{
+namespace telescope {
     class Touchscreen{
         public:
             Touchscreen(SPI_HandleTypeDef* hspi, GPIO_TypeDef* cs_port, uint16_t cs_pin,
@@ -32,10 +32,12 @@ namespace telescope{
             void gosearch();
             void gocancel();
             void view_change();
-            bool get_search_status();
             void normal_process(char action, char button);
-            bool get_main();
-            bool get_view_status();
+
+            bool get_search_status(); // returns whether in searching mode
+            bool get_main(); // returns whether touchscreen is on the main screen
+            bool get_view_status(); // returns whether general DSO identification is on/off
+            int get_selected_messier_id();
 
         private:
             SPI_HandleTypeDef* hspi_ = nullptr;

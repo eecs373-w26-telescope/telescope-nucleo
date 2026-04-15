@@ -546,6 +546,10 @@ namespace telescope{
         return view_;
     }
 
+    int Touchscreen::get_selected_messier_id() {
+        return std::stoi(display_);
+    }
+
     void Touchscreen::normal_process(char action, char button){
         if(length_ >= 4){
             error();

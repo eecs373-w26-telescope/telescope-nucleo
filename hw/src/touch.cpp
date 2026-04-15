@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace touch
+namespace telescope
 {
     static constexpr uint16_t TOP_BAR_H = 60;
     static constexpr uint16_t OPS_W = 140;

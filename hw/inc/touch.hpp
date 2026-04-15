@@ -20,7 +20,7 @@ extern "C" SPI_HandleTypeDef hspi1;
 #define RAW_Y_MIN 300
 #define RAW_Y_MAX 3900
 
-namespace touch{
+namespace telescope {
     class Touch{
         public:
             uint16_t raw_x, raw_y, real_x, real_y;
