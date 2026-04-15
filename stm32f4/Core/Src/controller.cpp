@@ -68,7 +68,7 @@ namespace telescope {
         LCD_RST_PORT, LCD_RST_PIN,
         LCD_LED_PORT, LCD_LED_PIN,
         LCD_DC_PORT,  LCD_DC_PIN);  // cs, rst, led, dc
-    touch::Touch touch;
+    Touch xpt;
 
     // BNO055 heading: int16_t units of 1/16 deg, full circle = 360 * 16 = 5760
     // AS5048A raw: uint16_t 14-bit, full circle = 16384
@@ -86,11 +86,13 @@ namespace telescope {
     constexpr uint32_t GPS_INTERVAL_MS = 1000; // 1 Hz
     constexpr uint32_t ENCODER_INTERVAL_MS = 100; // 10 Hz
     constexpr uint32_t SERIAL_INTERVAL_MS = 1000; // 1 Hz
+    constexpr uint32_t TOUCH_DEBOUNCE_MS  = 500;
     uint32_t last_imu_tick = 0;
     uint32_t last_gps_tick = 0;
     uint32_t last_ping_tick = 0;
     uint32_t last_encoder_tick = 0;
     uint32_t last_serial_tick = 0;
+    uint32_t last_touch_tick = 0;
 
     auto init() -> void {
         const char* msg = "telescope init\r\n";
@@ -108,7 +110,7 @@ namespace telescope {
         pitch_encoder = &pitch_enc;
         pitch_encoder->clear_error();
 
-        touch.init();
+        xpt.init();
         touchscreen.init();
         touchscreen.draw_main();
     }
@@ -176,11 +178,11 @@ namespace telescope {
                                   static_cast<uint16_t>(len), 100);
             }
 
-            if(touch.touch_pressed()){
-                HAL_Delay(500);
-                if(touch.touch_process()){
-                    char action = touchscreen.update_display_string(touch.button);
-                    touchscreen.normal_process(action, touch.button);
+            if(xpt.touch_pressed() && (now - last_touch_tick >= TOUCH_DEBOUNCE_MS)){
+                last_touch_tick = now;
+                if(xpt.touch_process()){
+                    char action = touchscreen.update_display_string(xpt.button);
+                    touchscreen.normal_process(action, xpt.button);
                 }
             }
 
