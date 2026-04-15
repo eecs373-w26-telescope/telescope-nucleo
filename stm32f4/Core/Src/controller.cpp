@@ -14,6 +14,7 @@ State machine implementation
 #include <hw/inc/imu.hpp>
 #include <hw/inc/raspi.hpp>
 #include <hw/inc/sd_card.hpp>
+#include <hw/inc/touch.hpp>
 #include <hw/inc/touchscreen.hpp>
 
 #include "main.h"
@@ -41,6 +42,15 @@ namespace telescope {
     #define ENCODER_PITCH_CS_PORT GPIOC
     #define ENCODER_PITCH_CS_PIN  GPIO_PIN_1  // D13 (PC1)
 
+    #define LCD_CS_PORT   GPIOA
+    #define LCD_CS_PIN    GPIO_PIN_4   // A0
+    #define LCD_RST_PORT  GPIOC
+    #define LCD_RST_PIN   GPIO_PIN_5   // A5
+    #define LCD_DC_PORT   GPIOB
+    #define LCD_DC_PIN    GPIO_PIN_13  // SCK
+    #define LCD_LED_PORT  GPIOB
+    #define LCD_LED_PIN   GPIO_PIN_15  // MOSI
+
     constexpr uint16_t ENCODER_FULL = 16384;
     constexpr uint16_t deg_to_raw(float deg) {
         return static_cast<uint16_t>((deg / 360.0f) * ENCODER_FULL) % ENCODER_FULL;
@@ -52,6 +62,13 @@ namespace telescope {
 
     encoder::Encoder* yaw_encoder = nullptr;
     encoder::Encoder* pitch_encoder = nullptr;
+
+    telescope::Touchscreen touchscreen(&hspi1,
+        LCD_CS_PORT,  LCD_CS_PIN,
+        LCD_RST_PORT, LCD_RST_PIN,
+        LCD_LED_PORT, LCD_LED_PIN,
+        LCD_DC_PORT,  LCD_DC_PIN);  // cs, rst, led, dc
+    touch::Touch touch;
 
     // BNO055 heading: int16_t units of 1/16 deg, full circle = 360 * 16 = 5760
     // AS5048A raw: uint16_t 14-bit, full circle = 16384
@@ -90,6 +107,10 @@ namespace telescope {
         static encoder::Encoder pitch_enc(&hspi1, ENCODER_PITCH_CS_PORT, ENCODER_PITCH_CS_PIN, PITCH_OFFSET);
         pitch_encoder = &pitch_enc;
         pitch_encoder->clearError();
+
+        touch.init();
+        touchscreen.init();
+        touchscreen.draw_main();
     }
 
     bool prev_button_pressed = false;
@@ -153,6 +174,14 @@ namespace telescope {
                                    static_cast<double>(pitch_deg));
                 HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(buf),
                                   static_cast<uint16_t>(len), 100);
+            }
+
+            if(touch.touch_pressed()){
+                HAL_Delay(500);
+                if(touch.touch_process()){
+                    char action = touchscreen.update_display_string(touch.button);
+                    touchscreen.normal_process(action, touch.button);
+                }
             }
 
             // Button press sends debug packet

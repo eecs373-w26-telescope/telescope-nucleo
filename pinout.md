@@ -41,23 +41,29 @@ All logic is 3.3V. Nearly all pins are 5V compliant. All pins can be interrupt i
 
 ## Pin Usage Tracker
 
-- [x] **A0** (PA4) - SPI CS Touchscreen High
+- [x] **A0** (PA4) - SPI CS Touchscreen Display
 - [x] **A1** (PA5) - SPI1_SCK
 - [x] **A2** (PA6) - SPI1_MISO
 - [x] **A3** (PA7) - SPI1_MOSI
 - [x] **A4** (PC4) - GPIO - debug button input
-- [ ] **A5** (PC5) - 
-- [ ] **SCK** (PB13) -
-- [ ] **MOSI** (PB15) -
-- [ ] **MISO** (PB14) - 
-- [ ] **RX** (PB11) -
-- [ ] **TX** (PB10) -
+- [x] **A5** (PC5) - GPIO - Touchscreen RST
+- [x] **SCK** (PB13) - GPIO - Touchscreen DC
+- [x] **MOSI** (PB15) - GPIO - Touchscreen LED
+- [x] **MISO** (PB14) - GPIO - Touchscreen IRQ (Touch)
+- [x] **RX** (PB11) - Serial Out
+- [x] **TX** (PB10) - Serial Out
 - [x] **SDA** (PB7) - USART1_RX - RPI TX
 - [x] **SCL** (PB6) - USART1_TX - RPI RX
 - [x] **D5** (PC7) - USART6_RX - GPS TX
 - [x] **D6** (PC6) - USART6_TX - GPS RX
 - [x] **D9** (PB8) - I2C1_SCL
 - [x] **D10** (PB9) - I2C1_SDA
-- [x] **D11** (PC3) - GPIO - SPI CS Touchscreen Low
+- [x] **D11** (PC3) - GPIO - SPI CS Touchscreen Touch
 - [x] **D12** (PC2) - GPIO - SPI CS Encoder Yaw
 - [x] **D13** (PC1) - GPIO - SPI CS Encoder Pitch
+
+CHIP SELECT ARRAY HIGH TO LOW:
+- Touchscreen Display
+- Touchscreen Touch
+- Encoder Yaw
+- Encoder Pitch
