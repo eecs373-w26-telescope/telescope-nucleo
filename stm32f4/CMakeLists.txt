@@ -51,6 +51,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../hw/src/gps.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../hw/src/sd_card.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../hw/src/touchscreen.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../hw/src/touch.cpp
 )
 
 # Add include paths
