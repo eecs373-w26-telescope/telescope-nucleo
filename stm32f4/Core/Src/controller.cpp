@@ -102,11 +102,11 @@ namespace telescope {
 
         static encoder::Encoder yaw_enc(&hspi1, ENCODER_YAW_CS_PORT, ENCODER_YAW_CS_PIN, YAW_OFFSET);
         yaw_encoder = &yaw_enc;
-        yaw_encoder->clearError();
+        yaw_encoder->clear_error();
 
         static encoder::Encoder pitch_enc(&hspi1, ENCODER_PITCH_CS_PORT, ENCODER_PITCH_CS_PIN, PITCH_OFFSET);
         pitch_encoder = &pitch_enc;
-        pitch_encoder->clearError();
+        pitch_encoder->clear_error();
 
         touch.init();
         touchscreen.init();
@@ -146,9 +146,9 @@ namespace telescope {
                 last_encoder_tick = now;
                 EncoderPayload payload{};
                 uint16_t raw = 0;
-                bool yaw_ok = (yaw_encoder->readRawAngle(raw) == HAL_OK);
+                bool yaw_ok = (yaw_encoder->read_raw_angle(raw) == HAL_OK);
                 if (yaw_ok) payload.yaw_raw = yaw_filter.update(raw);
-                bool pitch_ok = (pitch_encoder->readRawAngle(raw) == HAL_OK);
+                bool pitch_ok = (pitch_encoder->read_raw_angle(raw) == HAL_OK);
                 if (pitch_ok) payload.pitch_raw = pitch_filter.update(raw);
                 if (yaw_ok || pitch_ok) raspi::send_encoder(payload);
             }
@@ -159,8 +159,8 @@ namespace telescope {
                 uint8_t cal = imu::calibration();
                 float yaw_deg = 0.0f;
                 float pitch_deg = 0.0f;
-                yaw_encoder->readAngleDeg(yaw_deg);
-                pitch_encoder->readAngleDeg(pitch_deg);
+                yaw_encoder->read_angle_deg(yaw_deg);
+                pitch_encoder->read_angle_deg(pitch_deg);
                 char buf[120];
                 int len = snprintf(buf, sizeof(buf),
                                    "IMU: %s  HDG: %.1f  CAL: S%d G%d A%d M%d  GPS: %s  SAT: %d  YAW: %.1f  PIT: %.1f\r\n",

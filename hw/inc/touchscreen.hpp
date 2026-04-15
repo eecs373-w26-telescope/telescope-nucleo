@@ -11,7 +11,6 @@ namespace telescope{
                 GPIO_TypeDef* led_port, uint16_t led_pin,
                 GPIO_TypeDef* dc_port, uint16_t dc_pin);
 
-            char* get_display();
             void init();
             void reset();
             void display_on();

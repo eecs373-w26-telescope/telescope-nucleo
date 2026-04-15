@@ -27,70 +27,66 @@ namespace touch
         return (HAL_GPIO_ReadPin(TOUCH_IRQ_GPIO_Port, TOUCH_IRQ_Pin) == GPIO_PIN_RESET);
     }
 
-    uint16_t Touch::touch_Read12bit(uint8_t cmd){
+    uint16_t Touch::touch_read_12bit(uint8_t cmd){
         uint8_t rx[3];
-        uint8_t tx[3];
-
-        tx[0] = cmd;
-        tx[1] = 0x00; tx[2] = 0x00;
+        uint8_t tx[3] = {cmd, 0x00, 0x00};
 
         HAL_GPIO_WritePin(TOUCH_CS_GPIO_Port, TOUCH_CS_Pin, GPIO_PIN_RESET);
         HAL_SPI_TransmitReceive(&TOUCH_SPI_HANDLE, tx, rx, 3, HAL_MAX_DELAY);
         HAL_GPIO_WritePin(TOUCH_CS_GPIO_Port, TOUCH_CS_Pin, GPIO_PIN_SET);
 
-        uint16_t value = ((rx[1] << 8 | rx[2])) >> 3;
-        value &= 0x0FFF;
-        return value;
+        uint16_t value = ((rx[1] << 8) | rx[2]) >> 3;
+        return value & 0x0FFF;
     }
 
-    bool Touch::touch_ReadRaw(uint16_t* x, uint16_t* y){
+    bool Touch::touch_read_raw(uint16_t* x, uint16_t* y){
         if(x == nullptr || y == nullptr) return false;
-        if(!touch_Pressed()) return false;
+        if(!touch_pressed()) return false;
 
-        uint8_t Xcmd = 0b11010000;
-        uint8_t Ycmd = 0b10010000;
+        uint8_t x_cmd = 0b11010000;
+        uint8_t y_cmd = 0b10010000;
 
-        touch_Read12bit(Xcmd);
-        touch_Read12bit(Ycmd);
-        *x = touch_Read12bit(Xcmd);
-        *y = touch_Read12bit(Ycmd);
+        touch_read_12bit(x_cmd);
+        touch_read_12bit(y_cmd);
+        *x = touch_read_12bit(x_cmd);
+        *y = touch_read_12bit(y_cmd);
         return true;
     }
 
-    bool Touch::touch_ReadAverageRaw(uint16_t* x, uint16_t* y){
+    bool Touch::touch_read_average_raw(uint16_t* x, uint16_t* y){
         if(x == nullptr || y == nullptr) return false;
-        if(!touch_Pressed()) return false;
+        if(!touch_pressed()) return false;
 
         const int samples = 5;
-        uint32_t sumX = 0, sumY = 0;
+        uint32_t sum_x = 0, sum_y = 0;
         uint16_t valid = 0;
 
         for(int i = 0; i < samples; i++){
             uint16_t rx, ry;
-            if(touch_ReadRaw(&rx, &ry)){
+            if(touch_read_raw(&rx, &ry)){
                 valid++;
-                sumX += rx;
-                sumY += ry;
+                sum_x += rx;
+                sum_y += ry;
             }
             HAL_Delay(1);
         }
 
         if(valid == 0) return false;
-        *x = (uint16_t)(sumX / valid);
-        *y = (uint16_t)(sumY / valid);
+        *x = (uint16_t)(sum_x / valid);
+        *y = (uint16_t)(sum_y / valid);
         return true;
     }
 
-    bool Touch::touch_Convert(uint16_t rawX, uint16_t rawY, uint16_t* x, uint16_t* y){
+    bool Touch::touch_convert(uint16_t raw_x, uint16_t raw_y, uint16_t* x, uint16_t* y){
         if(x == nullptr || y == nullptr) return false;
 
-        if(rawX < RAW_X_MIN) rawX = RAW_X_MIN;
-        if(rawY < RAW_Y_MIN) rawY = RAW_Y_MIN;
-        if(rawX > RAW_X_MAX) rawX = RAW_X_MAX;
-        if(rawY > RAW_Y_MAX) rawY = RAW_Y_MAX;
+        if(raw_x < RAW_X_MIN) raw_x = RAW_X_MIN;
+        if(raw_y < RAW_Y_MIN) raw_y = RAW_Y_MIN;
+        if(raw_x > RAW_X_MAX) raw_x = RAW_X_MAX;
+        if(raw_y > RAW_Y_MAX) raw_y = RAW_Y_MAX;
 
-        uint32_t py = (rawX - RAW_X_MIN) * LCD_H / (RAW_X_MAX - RAW_X_MIN);
-        uint32_t px = (rawY - RAW_Y_MIN) * LCD_W / (RAW_Y_MAX - RAW_Y_MIN);
+        uint32_t py = (raw_x - RAW_X_MIN) * LCD_H / (RAW_X_MAX - RAW_X_MIN);
+        uint32_t px = (raw_y - RAW_Y_MIN) * LCD_W / (RAW_Y_MAX - RAW_Y_MIN);
 
         if(px >= LCD_W) px = LCD_W - 1;
         if(py >= LCD_H) py = LCD_H - 1;
@@ -100,7 +96,7 @@ namespace touch
         return true;
     }
 
-    char Touch::KeyPadConversion(uint16_t px, uint16_t py){
+    char Touch::keypad_conversion(uint16_t px, uint16_t py){
         char keys[4][3] = {
             {'1', '2', '3'},
             {'4', '5', '6'},
@@ -120,24 +116,24 @@ namespace touch
         }
     }
 
-    void Touch::touchCalibration(){
+    void Touch::touch_calibration(){
         uint16_t raw_x = 0, raw_y = 0;
-        touch_ReadRaw(&raw_x, &raw_y);
+        touch_read_raw(&raw_x, &raw_y);
         printf("raw_x=%u raw_y=%u\r\n", raw_x, raw_y);
         uint16_t x = 0, y = 0;
-        touch_Convert(raw_x, raw_y, &x, &y);
+        touch_convert(raw_x, raw_y, &x, &y);
         printf("Cali x = %u, y = %u\r\n", x, y);
     }
 
-    bool Touch::touchprocess(){
+    bool Touch::touch_process(){
         uint16_t raw_x = 0, raw_y = 0;
         uint16_t px = 0, py = 0;
-        if(touch_ReadAverageRaw(&raw_x, &raw_y)){
-            touch_Convert(raw_x, raw_y, &px, &py);
-            button = KeyPadConversion(px, py);
+        if(touch_read_average_raw(&raw_x, &raw_y)){
+            touch_convert(raw_x, raw_y, &px, &py);
+            button = keypad_conversion(px, py);
             return true;
         }
         return false;
     }
 
-} // namespace TOUCH
+} // namespace touch

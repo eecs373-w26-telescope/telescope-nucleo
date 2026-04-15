@@ -6,24 +6,24 @@
 namespace GPS {
 
 void gps::init(UART_HandleTypeDef* uart) {
-    huart = uart;
-    read_pos = 0;
-    line_index = 0;
-    std::memset(dma_buf, 0, sizeof(dma_buf));
-    std::memset(line_buf, 0, sizeof(line_buf));
+    huart_ = uart;
+    read_pos_ = 0;
+    line_index_ = 0;
+    std::memset(dma_buf_, 0, sizeof(dma_buf_));
+    std::memset(line_buf_, 0, sizeof(line_buf_));
 
-    HAL_UARTEx_ReceiveToIdle_DMA(huart, dma_buf, GPS_DMA_BUF_SIZE);
-    __HAL_DMA_DISABLE_IT(huart->hdmarx, DMA_IT_HT);
+    HAL_UARTEx_ReceiveToIdle_DMA(huart_, dma_buf_, GPS_DMA_BUF_SIZE);
+    __HAL_DMA_DISABLE_IT(huart_->hdmarx, DMA_IT_HT);
 }
 
 void gps::process() {
-    if (huart == nullptr) return;
+    if (huart_ == nullptr) return;
 
-    uint16_t write_pos = GPS_DMA_BUF_SIZE - __HAL_DMA_GET_COUNTER(huart->hdmarx);
+    uint16_t write_pos = GPS_DMA_BUF_SIZE - __HAL_DMA_GET_COUNTER(huart_->hdmarx);
 
-    while (read_pos != write_pos) {
-        process_byte(dma_buf[read_pos]);
-        read_pos = (read_pos + 1) % GPS_DMA_BUF_SIZE;
+    while (read_pos_ != write_pos) {
+        process_byte(dma_buf_[read_pos_]);
+        read_pos_ = (read_pos_ + 1) % GPS_DMA_BUF_SIZE;
     }
 }
 
@@ -31,26 +31,26 @@ void gps::process_byte(uint8_t byte) {
     char c = static_cast<char>(byte);
 
     if (c == '$') {
-        line_index = 0;
-        line_buf[line_index++] = c;
+        line_index_ = 0;
+        line_buf_[line_index_++] = c;
         return;
     }
 
     if (c == '\r') return;
 
     if (c == '\n') {
-        line_buf[line_index] = '\0';
-        if (is_rmc(line_buf)) {
-            parse_rmc(line_buf);
-        } else if (is_gga(line_buf)) {
-            parse_gga(line_buf);
+        line_buf_[line_index_] = '\0';
+        if (is_rmc(line_buf_)) {
+            parse_rmc(line_buf_);
+        } else if (is_gga(line_buf_)) {
+            parse_gga(line_buf_);
         }
-        line_index = 0;
+        line_index_ = 0;
         return;
     }
 
-    if (line_index < GPS_BUFFER_SIZE - 1) {
-        line_buf[line_index++] = c;
+    if (line_index_ < GPS_BUFFER_SIZE - 1) {
+        line_buf_[line_index_++] = c;
     }
 }
 
@@ -199,9 +199,9 @@ GpsPayload gps::payload() const {
 }
 
 void gps::rx_event_callback(uint16_t size) {
-    if (huart->RxState == HAL_UART_STATE_READY) {
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, dma_buf, GPS_DMA_BUF_SIZE);
-        __HAL_DMA_DISABLE_IT(huart->hdmarx, DMA_IT_HT);
+    if (huart_->RxState == HAL_UART_STATE_READY) {
+        HAL_UARTEx_ReceiveToIdle_DMA(huart_, dma_buf_, GPS_DMA_BUF_SIZE);
+        __HAL_DMA_DISABLE_IT(huart_->hdmarx, DMA_IT_HT);
     }
 }
 

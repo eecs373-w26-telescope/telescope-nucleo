@@ -8,29 +8,29 @@ namespace encoder
 {
     class Encoder{
         public:
-            Encoder(SPI_HandleTypeDef* hspi, GPIO_TypeDef* csPort,  uint16_t csPin, uint16_t offset = 0);
+            Encoder(SPI_HandleTypeDef* hspi, GPIO_TypeDef* cs_port, uint16_t cs_pin, uint16_t offset = 0);
 
-            HAL_StatusTypeDef readRawAngle(uint16_t& rawAngle);
-            HAL_StatusTypeDef readAngleDeg(float& angleDeg);
-            HAL_StatusTypeDef clearError();
+            HAL_StatusTypeDef read_raw_angle(uint16_t& raw_angle);
+            HAL_StatusTypeDef read_angle_deg(float& angle_deg);
+            HAL_StatusTypeDef clear_error();
 
-            void setOffset(uint16_t offset);
+            void set_offset(uint16_t offset);
 
         private:
-            SPI_HandleTypeDef* hspi;
-            GPIO_TypeDef* csPort;
-            uint16_t csPin;
-            uint16_t offset;
+            SPI_HandleTypeDef* hspi_;
+            GPIO_TypeDef* cs_port_;
+            uint16_t cs_pin_;
+            uint16_t offset_;
 
-            void csLow();
-            void csHigh();
+            void cs_low();
+            void cs_high();
 
-            uint8_t evenParity15(uint16_t value);
-            uint16_t buildReadCommand(uint16_t addr);
-            uint16_t buildFrame(uint16_t value);
+            uint8_t even_parity_15(uint16_t value);
+            uint16_t build_read_command(uint16_t addr);
+            uint16_t build_frame(uint16_t value);
 
-            HAL_StatusTypeDef transfer16(uint16_t txWord, uint16_t& rxWord);
-            HAL_StatusTypeDef readRegister(uint16_t addr, uint16_t& dataOut);
+            HAL_StatusTypeDef transfer_16(uint16_t tx_word, uint16_t& rx_word);
+            HAL_StatusTypeDef read_register(uint16_t addr, uint16_t& data_out);
 
     };
 } // namespace encoder

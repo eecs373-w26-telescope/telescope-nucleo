@@ -3,7 +3,7 @@
 ## Naming
 - Variables and functions: `snake_case`
 - State machine states: `PascalCase`
-- Abbreviations: all caps (`GPS`, `IMU`, `SPI`)
+- Abbreviations: all caps everywhere, including namespaces (`GPS`, `IMU`, `SPI`)
 - Private member variables: trailing underscore (`hspi_`, `cs_pin_`)
 
 ## Peripheral Structure

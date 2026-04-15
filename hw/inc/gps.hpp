@@ -37,13 +37,13 @@ public:
     uint8_t num_satellites = 0;
 
 private:
-    UART_HandleTypeDef* huart = nullptr;
+    UART_HandleTypeDef* huart_ = nullptr;
 
-    uint8_t dma_buf[GPS_DMA_BUF_SIZE]{};
-    uint16_t read_pos = 0;
+    uint8_t dma_buf_[GPS_DMA_BUF_SIZE]{};
+    uint16_t read_pos_ = 0;
 
-    char line_buf[GPS_BUFFER_SIZE]{};
-    uint16_t line_index = 0;
+    char line_buf_[GPS_BUFFER_SIZE]{};
+    uint16_t line_index_ = 0;
 
     void process_byte(uint8_t byte);
     void parse_rmc(const char* line);
