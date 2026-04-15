@@ -147,8 +147,13 @@ void process() {
 }
 
 bool send_packet(uint8_t packet_id, const uint8_t* payload, uint8_t length) {
-	if (tx_busy || uart_handle == nullptr) return false;
+	if (uart_handle == nullptr) return false;
 	if (length > MAX_PAYLOAD_SIZE) return false;
+
+	uint32_t start_wait = HAL_GetTick();
+	while (tx_busy) {
+		if (HAL_GetTick() - start_wait > 10) return false;
+	}
 
 	tx_buf[0] = SYNC_HI;
 	tx_buf[1] = SYNC_LO;
