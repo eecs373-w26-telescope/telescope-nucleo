@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
+#include <cstdlib>
 
 
 static constexpr uint16_t LCD_W = 480;
@@ -439,7 +440,7 @@ namespace telescope{
                 error();
                 return 'E';
             }
-            if(!messier_id_exists(std::stoi(display_))){
+            if(!messier_id_exists(std::atoi(display_))){
                 error();
             }
             else{
@@ -513,7 +514,7 @@ namespace telescope{
     }
 
     void Touchscreen::gosearch(){
-        search_id_ = std::stoi(display_);
+        search_id_ = std::atoi(display_);
         char output[8];
         snprintf(output, sizeof(output), "M%s", display_);
         enter_  = 0;
@@ -551,7 +552,7 @@ namespace telescope{
     }
 
     int Touchscreen::get_selected_messier_id() {
-        return std::stoi(display_);
+        return std::atoi(display_);
     }
 
     void Touchscreen::normal_process(char action, char button){
