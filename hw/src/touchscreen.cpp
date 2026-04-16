@@ -1,4 +1,5 @@
 #include <hw/inc/touchscreen.hpp>
+#include <hw/inc/spi_mode.hpp>
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
@@ -108,16 +109,20 @@ namespace telescope{
         HAL_GPIO_WritePin(cs_port_, cs_pin_, GPIO_PIN_SET);
     }
     void Touchscreen::write_command(uint8_t cmd){
+        spi_mode::set_mode0(hspi_);
         cs_low();
         HAL_GPIO_WritePin(dc_port_, dc_pin_, GPIO_PIN_RESET);
         HAL_SPI_Transmit(hspi_, &cmd, 1, HAL_MAX_DELAY);
         cs_high();
+        spi_mode::set_mode1(hspi_);
     }
     void Touchscreen::write_data(uint8_t* buff, size_t buff_size){
+        spi_mode::set_mode0(hspi_);
         cs_low();
         HAL_GPIO_WritePin(dc_port_, dc_pin_, GPIO_PIN_SET);
         HAL_SPI_Transmit(hspi_, buff, buff_size, HAL_MAX_DELAY);
         cs_high();
+        spi_mode::set_mode1(hspi_);
     }
     void Touchscreen::write_data_byte(uint8_t data){
         write_data(&data, 1);
@@ -254,6 +259,7 @@ namespace telescope{
         }
 
         uint32_t total_pixels = w * h;
+        spi_mode::set_mode0(hspi_);
         HAL_GPIO_WritePin(cs_port_, cs_pin_, GPIO_PIN_RESET);
         HAL_GPIO_WritePin(dc_port_, dc_pin_, GPIO_PIN_SET);
 
@@ -264,6 +270,7 @@ namespace telescope{
         }
 
         HAL_GPIO_WritePin(cs_port_, cs_pin_, GPIO_PIN_SET);
+        spi_mode::set_mode1(hspi_);
     }
 
     void Touchscreen::fill_screen(uint16_t color){

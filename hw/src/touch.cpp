@@ -1,4 +1,5 @@
 #include <hw/inc/touch.hpp>
+#include <hw/inc/spi_mode.hpp>
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
@@ -31,9 +32,11 @@ namespace telescope
         uint8_t rx[3];
         uint8_t tx[3] = {cmd, 0x00, 0x00};
 
+        spi_mode::set_mode0(&TOUCH_SPI_HANDLE);
         HAL_GPIO_WritePin(TOUCH_CS_GPIO_Port, TOUCH_CS_Pin, GPIO_PIN_RESET);
         HAL_SPI_TransmitReceive(&TOUCH_SPI_HANDLE, tx, rx, 3, HAL_MAX_DELAY);
         HAL_GPIO_WritePin(TOUCH_CS_GPIO_Port, TOUCH_CS_Pin, GPIO_PIN_SET);
+        spi_mode::set_mode1(&TOUCH_SPI_HANDLE);
 
         uint16_t value = ((rx[1] << 8) | rx[2]) >> 3;
         return value & 0x0FFF;
