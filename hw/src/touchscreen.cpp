@@ -2,7 +2,7 @@
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
-#include <iostream>
+
 
 static constexpr uint16_t LCD_W = 480;
 static constexpr uint16_t LCD_H = 320;
@@ -242,10 +242,14 @@ namespace telescope{
 
         set_address_window(x, y, x+w-1, y+h-1);
 
-        uint8_t data[2048];
-        for(int i = 0; i < 2048; i += 2){
-            data[i]   = color >> 8;
-            data[i+1] = color & 0xFF;
+        static uint8_t data[2048];
+        static uint16_t cached_color = 0xFFFF;
+        if(color != cached_color){
+            for(int i = 0; i < 2048; i += 2){
+                data[i]   = color >> 8;
+                data[i+1] = color & 0xFF;
+            }
+            cached_color = color;
         }
 
         uint32_t total_pixels = w * h;

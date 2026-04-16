@@ -94,13 +94,6 @@ namespace telescope {
     uint32_t last_serial_tick = 0;
     uint32_t last_touch_tick = 0;
 
-    // Cached values for debug logging
-    float latest_imu_heading = 0.0f;
-    uint8_t latest_imu_cal = 0;
-    bool latest_imu_ok = false;
-    float latest_yaw_deg = 0.0f;
-    float latest_pitch_deg = 0.0f;
-
     auto init() -> void {
         const char* msg = "telescope init\r\n";
         HAL_UART_Transmit(&huart3, reinterpret_cast<const uint8_t*>(msg), 16, 100);
@@ -136,13 +129,10 @@ namespace telescope {
 
             if (now - last_imu_tick >= IMU_INTERVAL_MS) {
                 last_imu_tick = now;
-                latest_imu_ok = imu::update();
-                if (latest_imu_ok) {
+                if (imu::update()) {
                     ImuPayload payload{};
                     payload.heading = imu_filter.update(imu::heading());
                     payload.calibration = imu::calibration();
-                    latest_imu_heading = static_cast<float>(imu::heading()) / 16.0f;
-                    latest_imu_cal = imu::calibration();
                     raspi::send_imu(payload);
                 }
             }
@@ -159,31 +149,31 @@ namespace telescope {
                 EncoderPayload payload{};
                 uint16_t raw = 0;
                 bool yaw_ok = (yaw_encoder->read_raw_angle(raw) == HAL_OK);
-                if (yaw_ok) {
-                    payload.yaw_raw = yaw_filter.update(raw);
-                    yaw_encoder->read_angle_deg(latest_yaw_deg);
-                }
+                if (yaw_ok) payload.yaw_raw = yaw_filter.update(raw);
                 bool pitch_ok = (pitch_encoder->read_raw_angle(raw) == HAL_OK);
-                if (pitch_ok) {
-                    payload.pitch_raw = pitch_filter.update(raw);
-                    pitch_encoder->read_angle_deg(latest_pitch_deg);
-                }
+                if (pitch_ok) payload.pitch_raw = pitch_filter.update(raw);
                 if (yaw_ok || pitch_ok) raspi::send_encoder(payload);
             }
 
             if (now - last_serial_tick >= SERIAL_INTERVAL_MS) {
                 last_serial_tick = now;
+                bool imu_ok = imu::update();
+                uint8_t cal = imu::calibration();
+                float yaw_deg = 0.0f;
+                float pitch_deg = 0.0f;
+                yaw_encoder->read_angle_deg(yaw_deg);
+                pitch_encoder->read_angle_deg(pitch_deg);
                 char buf[120];
                 int len = snprintf(buf, sizeof(buf),
                                    "IMU: %s  HDG: %.1f  CAL: S%d G%d A%d M%d  GPS: %s  SAT: %d  YAW: %.1f  PIT: %.1f\r\n",
-                                   latest_imu_ok ? "OK" : "FAIL",
-                                   static_cast<double>(latest_imu_heading),
-                                   (latest_imu_cal >> 6) & 3, (latest_imu_cal >> 4) & 3,
-                                   (latest_imu_cal >> 2) & 3, latest_imu_cal & 3,
+                                   imu_ok ? "OK" : "FAIL",
+                                   static_cast<float>(imu::heading()) / 16.0f,
+                                   (cal >> 6) & 3, (cal >> 4) & 3,
+                                   (cal >> 2) & 3, cal & 3,
                                    gps_sensor.has_fix() ? "FIX" : "---",
                                    gps_sensor.num_satellites,
-                                   static_cast<double>(latest_yaw_deg),
-                                   static_cast<double>(latest_pitch_deg));
+                                   static_cast<double>(yaw_deg),
+                                   static_cast<double>(pitch_deg));
                 HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(buf),
                                   static_cast<uint16_t>(len), 100);
             }
