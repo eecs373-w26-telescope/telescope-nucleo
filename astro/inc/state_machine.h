@@ -15,18 +15,9 @@ class StateMachine {
 public:
     enum class TelescopeState : uint8_t {
         INIT,
-        SETUP,
-        READY,
+        IDLE,
         SEARCH,
         FOUND
-    };
-
-    struct Event {
-        bool configuration_selected{false};
-        bool object_selected{false};
-        bool object_found{false};
-        bool request_cancelled{false};
-        bool display_objects{true};
     };
 
     StateMachine(Touchscreen& touchscreen,
@@ -38,7 +29,6 @@ public:
 
     void init() {
         current_state_ = TelescopeState::INIT;
-        events_ = Event{};
         selected_messier_id_ = -1;
         last_search_status_ = false;
         has_selected_object_ = false;
@@ -54,18 +44,12 @@ public:
     }
 
     void tick() {
-        clear_edge_events();
-        sample_ui_state();
-
         switch (current_state_) {
         case TelescopeState::INIT:
             handle_init();
             break;
-        case TelescopeState::SETUP:
-            handle_setup();
-            break;
-        case TelescopeState::READY:
-            handle_ready();
+        case TelescopeState::IDLE:
+            handle_idle();
             break;
         case TelescopeState::SEARCH:
             handle_search();
@@ -77,33 +61,19 @@ public:
     }
 
     TelescopeState current_state() const { return current_state_; }
-    const Event& events() const { return events_; }
     int selected_messier_id() const { return selected_messier_id_; }
 
 private:
-    void clear_edge_events() {
-        const bool display = events_.display_objects;
-        events_ = Event{};
-        events_.display_objects = display;
-    }
-
-    void sample_ui_state() {
-        events_.display_objects = touchscreen_.get_view_status();
-
+    void sample_search_events() {
         const bool search_now = touchscreen_.get_search_status();
 
         if (!last_search_status_ && search_now) {
-            events_.object_selected = true;
+            search_requested_ = true;
             selected_messier_id_ = touchscreen_.get_selected_messier_id();
         }
 
-        if (last_search_status_ && !search_now &&
-            (current_state_ == TelescopeState::SEARCH || current_state_ == TelescopeState::FOUND)) {
-            events_.request_cancelled = true;
-        }
-
-        if (touchscreen_.get_main()) {
-            events_.configuration_selected = true;
+        if (last_search_status_ && !search_now) {
+            cancel_requested_ = true;
         }
 
         last_search_status_ = search_now;
@@ -131,7 +101,8 @@ private:
         return false;
     }
 
-    void send_state_sync() {
+    void transition(TelescopeState next) {
+        current_state_ = next;
         StateSyncPayload payload{};
         payload.state = static_cast<uint8_t>(current_state_);
         payload.flags = 0;
@@ -140,37 +111,31 @@ private:
     }
 
     void handle_init() {
-        current_state_ = TelescopeState::SETUP;
-        send_state_sync();
+        transition(TelescopeState::IDLE);
     }
 
-    void handle_setup() {
+    void handle_idle() {
+        sample_search_events();
         update_fov_and_objects();
 
-        if (events_.configuration_selected) {
-            current_state_ = TelescopeState::READY;
-            send_state_sync();
-        }
-    }
-
-    void handle_ready() {
-        update_fov_and_objects();
-
-        if (events_.object_selected) {
+        if (search_requested_) {
+            search_requested_ = false;
+            cancel_requested_ = false;
             try_select_target_from_current_fov(selected_messier_id_);
-            current_state_ = TelescopeState::SEARCH;
-            send_state_sync();
+            transition(TelescopeState::SEARCH);
         }
     }
 
     void handle_search() {
+        sample_search_events();
         update_fov_and_objects();
 
-        if (events_.request_cancelled) {
+        if (cancel_requested_) {
+            cancel_requested_ = false;
+            search_requested_ = false;
             has_selected_object_ = false;
             selected_messier_id_ = -1;
-            current_state_ = TelescopeState::READY;
-            send_state_sync();
+            transition(TelescopeState::IDLE);
             return;
         }
 
@@ -178,40 +143,32 @@ private:
             try_select_target_from_current_fov(selected_messier_id_);
         }
 
-        if (has_selected_object_) {
-            events_.object_found =
-                astronomy_.is_object_in_FOV(selected_object_, astronomy_.get_current_fov());
-        } else {
-            events_.object_found = false;
-        }
+        bool in_fov = has_selected_object_ &&
+            astronomy_.is_object_in_FOV(selected_object_, astronomy_.get_current_fov());
 
-        if (events_.object_found) {
-            current_state_ = TelescopeState::FOUND;
-            send_state_sync();
+        if (in_fov) {
+            transition(TelescopeState::FOUND);
         }
     }
 
     void handle_found() {
+        sample_search_events();
         update_fov_and_objects();
 
-        if (events_.request_cancelled) {
+        if (cancel_requested_) {
+            cancel_requested_ = false;
+            search_requested_ = false;
             has_selected_object_ = false;
             selected_messier_id_ = -1;
-            current_state_ = TelescopeState::READY;
-            send_state_sync();
+            transition(TelescopeState::IDLE);
             return;
         }
 
-        if (has_selected_object_) {
-            events_.object_found =
-                astronomy_.is_object_in_FOV(selected_object_, astronomy_.get_current_fov());
-        } else {
-            events_.object_found = false;
-        }
+        bool in_fov = has_selected_object_ &&
+            astronomy_.is_object_in_FOV(selected_object_, astronomy_.get_current_fov());
 
-        if (!events_.object_found) {
-            current_state_ = TelescopeState::SEARCH;
-            send_state_sync();
+        if (!in_fov) {
+            transition(TelescopeState::SEARCH);
         }
     }
 
@@ -222,9 +179,10 @@ private:
     Astronomy astronomy_;
 
     TelescopeState current_state_{TelescopeState::INIT};
-    Event events_{};
 
     bool last_search_status_{false};
+    bool search_requested_{false};
+    bool cancel_requested_{false};
     int selected_messier_id_{-1};
 
     uint16_t state_sequence_{0};
