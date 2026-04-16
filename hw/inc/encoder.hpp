@@ -10,8 +10,8 @@ namespace encoder
         public:
             Encoder(SPI_HandleTypeDef* hspi, GPIO_TypeDef* cs_port, uint16_t cs_pin, uint16_t offset = 0);
 
-            HAL_StatusTypeDef read_raw_angle(uint16_t& raw_angle);
-            HAL_StatusTypeDef read_angle_deg(float& angle_deg);
+            HAL_StatusTypeDef read_raw_angle(uint16_t& raw_angle, bool invert = false);
+            HAL_StatusTypeDef read_angle_deg(float& angle_deg, bool invert = false);
             HAL_StatusTypeDef clear_error();
 
             void set_offset(uint16_t offset);

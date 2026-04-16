@@ -57,7 +57,7 @@ namespace telescope {
     }
 
     // OFFSET HEADING HERE
-    constexpr uint16_t YAW_OFFSET   = deg_to_raw(332.0f);
+    constexpr uint16_t YAW_OFFSET   = deg_to_raw(27.0f);
     constexpr uint16_t PITCH_OFFSET = deg_to_raw(116.6f);
 
     encoder::Encoder* yaw_encoder = nullptr;
@@ -154,7 +154,7 @@ namespace telescope {
                 last_encoder_tick = now;
                 EncoderPayload payload{};
                 uint16_t raw = 0;
-                bool yaw_ok = (yaw_encoder->read_raw_angle(raw) == HAL_OK);
+                bool yaw_ok = (yaw_encoder->read_raw_angle(raw, true) == HAL_OK);
                 if (yaw_ok) payload.yaw_raw = yaw_filter.update(raw);
                 bool pitch_ok = (pitch_encoder->read_raw_angle(raw) == HAL_OK);
                 if (pitch_ok) payload.pitch_raw = pitch_filter.update(raw);
@@ -167,7 +167,7 @@ namespace telescope {
                 uint8_t cal = imu::calibration();
                 float yaw_deg = 0.0f;
                 float pitch_deg = 0.0f;
-                yaw_encoder->read_angle_deg(yaw_deg);
+                yaw_encoder->read_angle_deg(yaw_deg, true);
                 pitch_encoder->read_angle_deg(pitch_deg);
                 char buf[120];
                 int len = snprintf(buf, sizeof(buf),

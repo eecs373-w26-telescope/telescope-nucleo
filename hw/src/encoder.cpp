@@ -90,17 +90,18 @@ namespace encoder
         return HAL_OK;
     }
 
-    HAL_StatusTypeDef Encoder::read_raw_angle(uint16_t& raw_angle){
+    HAL_StatusTypeDef Encoder::read_raw_angle(uint16_t& raw_angle, bool invert){
         uint16_t raw = 0;
         HAL_StatusTypeDef status = read_register(AS5048_ANGLE, raw);
         if(status != HAL_OK) return status;
+        if (invert) raw = (AS5048_FULL - raw) % AS5048_FULL;
         raw_angle = (raw + AS5048_FULL - offset_) % AS5048_FULL;
         return HAL_OK;
     }
 
-    HAL_StatusTypeDef Encoder::read_angle_deg(float& angle_deg){
+    HAL_StatusTypeDef Encoder::read_angle_deg(float& angle_deg, bool invert){
         uint16_t raw = 0;
-        HAL_StatusTypeDef status = read_raw_angle(raw);
+        HAL_StatusTypeDef status = read_raw_angle(raw, invert);
         if(status != HAL_OK) return status;
         angle_deg = (360.0f * static_cast<float>(raw)) / 16384.0f;
         return HAL_OK;
