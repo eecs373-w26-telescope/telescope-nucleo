@@ -43,6 +43,7 @@ public:
         last_search_status_ = false;
         has_selected_object_ = false;
         selected_object_ = DSO{};
+        state_sequence_ = 0;
     }
 
     void update_sensors(float altitude_deg, float azimuth_deg,
@@ -130,27 +131,17 @@ private:
         return false;
     }
 
-    void send_state_debug() {
-        DebugPayload dbg{};
-        const char* label = nullptr;
-
-        switch (current_state_) {
-        case TelescopeState::INIT:   label = "INIT"; break;
-        case TelescopeState::SETUP:  label = "SETUP"; break;
-        case TelescopeState::READY:  label = "READY"; break;
-        case TelescopeState::SEARCH: label = "SEARCH"; break;
-        case TelescopeState::FOUND:  label = "FOUND"; break;
-        }
-
-        for (int i = 0; i < 6 && label[i] != '\0'; ++i) {
-            dbg.data[i] = static_cast<uint8_t>(label[i]);
-        }
-        raspi::send_debug(dbg);
+    void send_state_sync() {
+        StateSyncPayload payload{};
+        payload.state = static_cast<uint8_t>(current_state_);
+        payload.flags = 0;
+        payload.sequence = state_sequence_++;
+        raspi::send_state_sync(payload);
     }
 
     void handle_init() {
         current_state_ = TelescopeState::SETUP;
-        send_state_debug();
+        send_state_sync();
     }
 
     void handle_setup() {
@@ -158,7 +149,7 @@ private:
 
         if (events_.configuration_selected) {
             current_state_ = TelescopeState::READY;
-            send_state_debug();
+            send_state_sync();
         }
     }
 
@@ -168,7 +159,7 @@ private:
         if (events_.object_selected) {
             try_select_target_from_current_fov(selected_messier_id_);
             current_state_ = TelescopeState::SEARCH;
-            send_state_debug();
+            send_state_sync();
         }
     }
 
@@ -179,7 +170,7 @@ private:
             has_selected_object_ = false;
             selected_messier_id_ = -1;
             current_state_ = TelescopeState::READY;
-            send_state_debug();
+            send_state_sync();
             return;
         }
 
@@ -196,7 +187,7 @@ private:
 
         if (events_.object_found) {
             current_state_ = TelescopeState::FOUND;
-            send_state_debug();
+            send_state_sync();
         }
     }
 
@@ -207,7 +198,7 @@ private:
             has_selected_object_ = false;
             selected_messier_id_ = -1;
             current_state_ = TelescopeState::READY;
-            send_state_debug();
+            send_state_sync();
             return;
         }
 
@@ -220,7 +211,7 @@ private:
 
         if (!events_.object_found) {
             current_state_ = TelescopeState::SEARCH;
-            send_state_debug();
+            send_state_sync();
         }
     }
 
@@ -236,6 +227,7 @@ private:
     bool last_search_status_{false};
     int selected_messier_id_{-1};
 
+    uint16_t state_sequence_{0};
     bool has_selected_object_{false};
     DSO selected_object_{};
 };

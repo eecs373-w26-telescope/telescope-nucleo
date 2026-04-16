@@ -34,7 +34,6 @@ Offset  Size  Field
 | 0x02 | PACKET_ENCODER    | 4B      | 10 Hz       |
 | 0x03 | PACKET_IMU        | 3B      | 10 Hz       |
 | 0x04 | PACKET_STATE_SYNC | 4B      | On change   |
-| 0x05 | PACKET_DSO_TARGET | 31B     | On change   |
 | 0xFF | PACKET_DEBUG      | 16B     | Ad hoc      |
 
 ## Payload Definitions
@@ -87,27 +86,9 @@ Sent by Nucleo on every state transition. Raspi mirrors this as its authoritativ
 
 ```
 Offset  Type      Field      Notes
-0       uint8_t   state      TelescopeState: INIT=0, SETUP=1, IDLE=2, SEARCH=3, FOUND=4
+0       uint8_t   state      TelescopeState: INIT=0, SETUP=1, READY=2, SEARCH=3, FOUND=4
 1       uint8_t   flags      reserved bitfield
 2       uint16_t  sequence   monotonic counter for gap detection
-```
-
-### DsoTargetPayload (0x05, 31 bytes)
-
-Sent by Nucleo when a target DSO is selected (on SEARCH entry). Raspi uses this to
-render the target overlay. `status` indicates whether the SD card lookup succeeded.
-
-```
-Offset  Type      Field            Notes
-0       uint8_t   status           0=OK, 1=not_found, 2=sd_error
-1       uint16_t  catalog_number   Messier number (1-110)
-3       uint8_t   object_type      0=galaxy, 1=nebula, 2=open_cluster,
-                                   3=globular_cluster, 4=planetary_nebula
-4       int32_t   ra_mas           right ascension in milliarcseconds (0 to 1,296,000,000)
-8       int32_t   dec_mas          declination in milliarcseconds (-324,000,000 to +324,000,000)
-12      int16_t   magnitude_e2     apparent magnitude * 100 (e.g. 350 = mag 3.50)
-14      uint8_t   constellation    index 0-87 into constellation enum
-15      char      name[16]         null-terminated common name, e.g. "Andromeda"
 ```
 
 ### DebugPayload (0xFF, 16 bytes)
@@ -127,4 +108,4 @@ Offset  Type      Field    Notes
 | Encoder         | 10B        | 10 Hz  | 100       |
 | IMU             | 9B         | 10 Hz  | 90        |
 | State sync      | 10B        | <1 Hz  | <10       |
-| **Total**       |            |        | **~212**  |
+| **Total**       |            |        | **~222**  |
