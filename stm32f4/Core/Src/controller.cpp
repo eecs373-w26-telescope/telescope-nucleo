@@ -113,6 +113,12 @@ namespace telescope {
         xpt.init();
         touchscreen.init();
         touchscreen.draw_main();
+
+        static SDCard::SDCard sd;
+        int sd_result = sd.mount();
+        char sd_msg[48];
+        int sd_len = snprintf(sd_msg, sizeof(sd_msg), "SD mount: %s\r\n", sd_result == 0 ? "OK" : "FAIL");
+        HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(sd_msg), static_cast<uint16_t>(sd_len), 100);
     }
 
     bool prev_button_pressed = false;
