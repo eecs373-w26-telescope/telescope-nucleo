@@ -16,6 +16,7 @@ State machine implementation
 #include <hw/inc/sd_card.hpp>
 #include <hw/inc/touch.hpp>
 #include <hw/inc/touchscreen.hpp>
+#include <astro/inc/state_machine.h>
 
 #include "main.h"
 #include "stm32f4xx.h"
@@ -81,18 +82,23 @@ namespace telescope {
       Initialization sequence
     */
     GPS::gps gps_sensor;
+    SDCard::SDCard sd_card;
 
     constexpr uint32_t IMU_INTERVAL_MS = 100; // 10 Hz
     constexpr uint32_t GPS_INTERVAL_MS = 1000; // 1 Hz
     constexpr uint32_t ENCODER_INTERVAL_MS = 100; // 10 Hz
     constexpr uint32_t SERIAL_INTERVAL_MS = 1000; // 1 Hz
     constexpr uint32_t TOUCH_DEBOUNCE_MS  = 500;
+    constexpr uint32_t STATE_MACHINE_INTERVAL_MS = 100; // 10 Hz
     uint32_t last_imu_tick = 0;
     uint32_t last_gps_tick = 0;
     uint32_t last_ping_tick = 0;
     uint32_t last_encoder_tick = 0;
     uint32_t last_serial_tick = 0;
     uint32_t last_touch_tick = 0;
+    uint32_t last_sm_tick = 0;
+
+    StateMachine* state_machine = nullptr;
 
     auto init() -> void {
         const char* msg = "telescope init\r\n";
@@ -114,11 +120,14 @@ namespace telescope {
         touchscreen.init();
         touchscreen.draw_main();
 
-        static SDCard::SDCard sd;
-        int sd_result = sd.mount();
+        int sd_result = sd_card.mount();
         char sd_msg[48];
         int sd_len = snprintf(sd_msg, sizeof(sd_msg), "SD mount: %s\r\n", sd_result == 0 ? "OK" : "FAIL");
         HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(sd_msg), static_cast<uint16_t>(sd_len), 100);
+
+        static StateMachine sm(touchscreen, sd_card);
+        sm.init();
+        state_machine = &sm;
     }
 
     bool prev_button_pressed = false;
@@ -190,6 +199,27 @@ namespace telescope {
                     char action = touchscreen.update_display_string(xpt.button);
                     touchscreen.normal_process(action, xpt.button);
                 }
+            }
+
+            if (now - last_sm_tick >= STATE_MACHINE_INTERVAL_MS) {
+                last_sm_tick = now;
+                float yaw_deg_sm = 0.0f;
+                float pitch_deg_sm = 0.0f;
+                yaw_encoder->read_angle_deg(yaw_deg_sm, true);
+                pitch_encoder->read_angle_deg(pitch_deg_sm);
+
+                float lat = static_cast<float>(gps_sensor.latitude);
+                float lon = static_cast<float>(gps_sensor.longitude);
+                UTC time{};
+                time.year = gps_sensor.year;
+                time.month = gps_sensor.month;
+                time.day = gps_sensor.day;
+                time.hour = gps_sensor.utc_hours;
+                time.minute = gps_sensor.utc_minutes;
+                time.second = static_cast<int>(gps_sensor.utc_seconds);
+
+                state_machine->update_sensors(pitch_deg_sm, yaw_deg_sm, lat, lon, time);
+                state_machine->tick();
             }
 
             // Button press sends debug packet

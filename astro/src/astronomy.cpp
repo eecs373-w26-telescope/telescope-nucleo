@@ -47,18 +47,14 @@ int Astronomy::calculate_adjusted_azimuth(int raw_azimuth_deg, int yaw_deg) cons
     return adjusted;
 }
 
-//TODO: not actually pose lol
-void Astronomy::reset_pose() {
-    // gc.longitude = GPS::get_longitude();
-    // gc.latitude = GPS::get_latitude();
-    // utc = GPS::get_utc();
-
-    // const int yaw_deg = IMU::get_yaw();
-    // const int raw_altitude_deg = Encoder::get_altitude();
-    // const int raw_azimuth_deg = Encoder::get_azimuth();
-
-    // hc.altitude = static_cast<float>(calculate_adjusted_altitude(raw_altitude_deg));
-    // hc.azimuth  = static_cast<float>(calculate_adjusted_azimuth(raw_azimuth_deg, yaw_deg));
+void Astronomy::update_pose(float altitude_deg, float azimuth_deg,
+                            float latitude, float longitude,
+                            const UTC& time) {
+    gc.latitude = latitude;
+    gc.longitude = longitude;
+    utc = time;
+    hc.altitude = altitude_deg;
+    hc.azimuth = azimuth_deg;
 }
 
 void Astronomy::convert_hc_to_eqc() {
