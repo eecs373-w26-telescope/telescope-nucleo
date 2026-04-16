@@ -57,7 +57,7 @@ namespace telescope {
     }
 
     // OFFSET HEADING HERE
-    constexpr uint16_t YAW_OFFSET   = deg_to_raw(0.0f);
+    constexpr uint16_t YAW_OFFSET   = deg_to_raw(332.0f);
     constexpr uint16_t PITCH_OFFSET = deg_to_raw(116.6f);
 
     encoder::Encoder* yaw_encoder = nullptr;
