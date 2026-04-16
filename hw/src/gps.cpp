@@ -1,4 +1,4 @@
-#include <hw/inc/GPS.hpp>
+#include <hw/inc/gps.hpp>
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
