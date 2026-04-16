@@ -20,6 +20,12 @@ namespace telescope
     static constexpr uint16_t OPS_BTN_W = OPS_W - 2 * GAP;
     static constexpr uint16_t OPS_BTN_H = (CONTENT_H - 4 * GAP)/3;
 
+     //On OFF button
+    static constexpr uint16_t DSO_VIEW_BOX_W = 160;
+    static constexpr uint16_t DSO_VIEW_BOX_X = 360;
+    static constexpr uint16_t DSO_VIEW_BOX_H = 40;
+    static constexpr uint16_t DSO_VIEW_BOX_Y = 10;
+
     void Touch::init(){
         HAL_GPIO_WritePin(TOUCH_CS_GPIO_Port, TOUCH_CS_Pin, GPIO_PIN_SET);
     }
@@ -44,7 +50,7 @@ namespace telescope
 
     bool Touch::touch_read_raw(uint16_t* x, uint16_t* y){
         if(x == nullptr || y == nullptr) return false;
-        if(!touch_pressed()) return false;
+        // if(!touch_pressed()) return false;
 
         uint8_t x_cmd = 0b11010000;
         uint8_t y_cmd = 0b10010000;
@@ -58,7 +64,7 @@ namespace telescope
 
     bool Touch::touch_read_average_raw(uint16_t* x, uint16_t* y){
         if(x == nullptr || y == nullptr) return false;
-        if(!touch_pressed()) return false;
+        // if(!touch_pressed()) return false;
 
         const int samples = 5;
         uint32_t sum_x = 0, sum_y = 0;
@@ -91,6 +97,8 @@ namespace telescope
         uint32_t py = (raw_x - RAW_X_MIN) * LCD_H / (RAW_X_MAX - RAW_X_MIN);
         uint32_t px = (raw_y - RAW_Y_MIN) * LCD_W / (RAW_Y_MAX - RAW_Y_MIN);
 
+        if(px < 0 ) px = 0;
+        if(py < 0 ) py = 0;
         if(px >= LCD_W) px = LCD_W - 1;
         if(py >= LCD_H) py = LCD_H - 1;
 
@@ -106,17 +114,46 @@ namespace telescope
             {'7', '8', '9'},
             {' ', '0', ' '}
         };
-        char labels[3] = {'B', 'C', 'E'};
+        //char labels[3] = {'B', 'C', 'E'};
 
-        if(px < OPS_X){
-            int c = (px - GAP) / (KEY_W + GAP);
-            int r = (py - CONTENT_Y - GAP) / (KEY_H + GAP);
-            return keys[r][c];
+        // if(px < OPS_X){
+        //     int c = (px - GAP) / (KEY_W + GAP);
+        //     int r = (py - CONTENT_Y - GAP) / (KEY_H + GAP);
+        //     return keys[r][c];
+        // }
+        // else{
+        //     int option = (py - CONTENT_Y - GAP) / (OPS_BTN_H + GAP);
+        //     return labels[option];
+        // }
+        for (int r = 0; r < KEY_ROWS; r++) {
+            for (int c = 0; c < KEY_COLS; c++) {
+                uint16_t x = GAP + c * (KEY_W + GAP);
+                uint16_t y = CONTENT_Y + GAP + r * (KEY_H + GAP);
+
+                if (px >= x && px < x + KEY_W &&
+                    py >= y && py < y + KEY_H) {
+                    return keys[r][c];
+                }
+            }
         }
-        else{
-            int option = (py - CONTENT_Y - GAP) / (OPS_BTN_H + GAP);
-            return labels[option];
+
+        if (px >= OPS_X + GAP && px < OPS_X + GAP + OPS_BTN_W &&
+            py >= DSO_VIEW_BOX_Y && py < DSO_VIEW_BOX_Y + DSO_VIEW_BOX_H) {
+            return 'V';
         }
+
+        
+        for (int i = 0; i < 3; i++) {
+            uint16_t x = OPS_X + GAP;
+            uint16_t y = CONTENT_Y + GAP + i * (OPS_BTN_H + GAP);
+
+            if (px >= x && px < x + OPS_BTN_W &&
+                py >= y && py < y + OPS_BTN_H) {
+                return (i == 0) ? 'B' : (i == 1) ? 'C' : 'E';
+            }
+        }
+
+        return '\0';
     }
 
     void Touch::touch_calibration(){
@@ -133,7 +170,11 @@ namespace telescope
         uint16_t px = 0, py = 0;
         if(touch_read_average_raw(&raw_x, &raw_y)){
             touch_convert(raw_x, raw_y, &px, &py);
-            button = keypad_conversion(px, py);
+            char c = keypad_conversion(px, py);
+            if(c == '\0'){
+                return false;
+            }
+            button = c;
             return true;
         }
         return false;
