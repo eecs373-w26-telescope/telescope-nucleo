@@ -12,7 +12,7 @@ Interface to SD card
 #include "ff.h"
 #include <astro/inc/units.hpp>
 
-namespace SDCard {
+namespace telescope {
 
 class SDCard {
 public:
@@ -34,6 +34,8 @@ public:
         float dec_deg;
         float mag;
     };
+
+    SDCard() = default;
 
     int mount();
     int unmount();
@@ -65,4 +67,4 @@ private:
     bool header_valid_{false};
 };
 
-} //namespace SDCard
+} //namespace telescope

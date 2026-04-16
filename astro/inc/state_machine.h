@@ -21,7 +21,7 @@ public:
     };
 
     StateMachine(Touchscreen& touchscreen,
-                 SDCard::SDCard& sdcard)
+                 SDCard& sdcard)
         : touchscreen_(touchscreen),
           sdcard_(sdcard),
           telescope_cfg_{},

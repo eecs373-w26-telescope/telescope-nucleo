@@ -3,7 +3,8 @@
 static constexpr uint32_t MAGIC = 0x44534F31;
 static constexpr const char* MOUNT_PATH = ""; // default
 
-int SDCard::SDCard::mount() {
+namespace telescope {
+int SDCard::mount() {
     if (mounted_) return 0;
 
     FRESULT res = f_mount(&fs_, MOUNT_PATH, 1);
@@ -11,7 +12,7 @@ int SDCard::SDCard::mount() {
     return mounted_ ? 0 : -1;
 }
 
-int SDCard::SDCard::unmount() {
+int SDCard::unmount() {
     if (!mounted_) return 0;
 
     FRESULT res = f_mount(nullptr, MOUNT_PATH, 1);
@@ -19,7 +20,7 @@ int SDCard::SDCard::unmount() {
     return (res == FR_OK) ? 0 : -1;
 }
 
-int SDCard::SDCard::open_catalogue(const char* path) {
+int SDCard::open_catalogue(const char* path) {
     if (!mounted_) return -1;
     if (file_open_) return 0;
 
@@ -34,7 +35,7 @@ int SDCard::SDCard::open_catalogue(const char* path) {
 }
 
 
-int SDCard::SDCard::close_catalogue() {
+int SDCard::close_catalogue() {
     if (!file_open_) {
         return 0;
     }
@@ -44,7 +45,7 @@ int SDCard::SDCard::close_catalogue() {
     return (res == FR_OK) ? 0 : -1;
 }
 
-int SDCard::SDCard::read_header(FileHeader& header_out) {
+int SDCard::read_header(FileHeader& header_out) {
     if (!file_open_) {
         return -1;
     }
@@ -67,7 +68,7 @@ int SDCard::SDCard::read_header(FileHeader& header_out) {
     return 0;
 }
 
-int SDCard::SDCard::compute_bin_id(float ra_deg, float dec_deg, uint16_t ra_bins, uint16_t dec_bins) {
+int SDCard::compute_bin_id(float ra_deg, float dec_deg, uint16_t ra_bins, uint16_t dec_bins) {
     const float ra_norm = std::fmod(std::fmod(ra_deg, 360.0f) + 360.0f, 360.0f);
     const float dec_clamped = std::max(-90.0f, std::min(90.0f, dec_deg));
 
@@ -84,7 +85,7 @@ int SDCard::SDCard::compute_bin_id(float ra_deg, float dec_deg, uint16_t ra_bins
     return dec_bin * ra_bins + ra_bin;
 }
 
-int SDCard::SDCard::read_bin_index(uint32_t bin_id, BinIndex& out_index) {
+int SDCard::read_bin_index(uint32_t bin_id, BinIndex& out_index) {
     if (!header_valid_) {
         return -1;
     }
@@ -103,7 +104,7 @@ int SDCard::SDCard::read_bin_index(uint32_t bin_id, BinIndex& out_index) {
     return 0;
 }
 
-int SDCard::SDCard::read_object_at_current_pos(BinObjectRecord& out_record) {
+int SDCard::read_object_at_current_pos(BinObjectRecord& out_record) {
     UINT br = 0;
     if (f_read(&file_, &out_record, sizeof(BinObjectRecord), &br) != FR_OK ||
         br != sizeof(BinObjectRecord)) {
@@ -112,7 +113,7 @@ int SDCard::SDCard::read_object_at_current_pos(BinObjectRecord& out_record) {
     return 0;
 }
 
-int SDCard::SDCard::search_objects_in_bounds(float ra_min_deg,
+int SDCard::search_objects_in_bounds(float ra_min_deg,
                                           float ra_max_deg,
                                           float dec_min_deg,
                                           float dec_max_deg,
@@ -168,3 +169,4 @@ int SDCard::SDCard::search_objects_in_bounds(float ra_min_deg,
 
     return 0;
 }
+} // namespace telescope

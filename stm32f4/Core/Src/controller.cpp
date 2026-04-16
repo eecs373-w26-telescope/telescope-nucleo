@@ -31,13 +31,9 @@ extern "C" SPI_HandleTypeDef hspi1;
 
 namespace telescope {
 
-    /*
-        I2C
-    */
-
-    /*
-        SPI
-    */
+    /***********************
+    PORTS & PINS
+    ************************/
     #define ENCODER_YAW_CS_PORT   GPIOC
     #define ENCODER_YAW_CS_PIN    GPIO_PIN_2  // D12 (PC2)
     #define ENCODER_PITCH_CS_PORT GPIOC
@@ -52,6 +48,12 @@ namespace telescope {
     #define LCD_LED_PORT  GPIOB
     #define LCD_LED_PIN   GPIO_PIN_15  // MOSI
 
+    #define DEBUG_BUTTON_PORT GPIOC
+    #define DEBUG_BUTTON_PIN  GPIO_PIN_4
+
+    /***********************
+    OFFSETS & FILTERS
+    ************************/
     constexpr uint16_t ENCODER_FULL = 16384;
     constexpr uint16_t deg_to_raw(float deg) {
         return static_cast<uint16_t>((deg / 360.0f) * ENCODER_FULL) % ENCODER_FULL;
@@ -61,16 +63,6 @@ namespace telescope {
     constexpr uint16_t YAW_OFFSET   = deg_to_raw(27.0f);
     constexpr uint16_t PITCH_OFFSET = deg_to_raw(116.6f);
 
-    encoder::Encoder* yaw_encoder = nullptr;
-    encoder::Encoder* pitch_encoder = nullptr;
-
-    telescope::Touchscreen touchscreen(&hspi1,
-        LCD_CS_PORT,  LCD_CS_PIN,
-        LCD_RST_PORT, LCD_RST_PIN,
-        LCD_LED_PORT, LCD_LED_PIN,
-        LCD_DC_PORT,  LCD_DC_PIN);  // cs, rst, led, dc
-    Touch xpt;
-
     // BNO055 heading: int16_t units of 1/16 deg, full circle = 360 * 16 = 5760
     // AS5048A raw: uint16_t 14-bit, full circle = 16384
     constexpr std::size_t FILTER_WINDOW = 8;
@@ -78,12 +70,28 @@ namespace telescope {
     filter::Filter<uint16_t, FILTER_WINDOW> yaw_filter{16384};
     filter::Filter<uint16_t, FILTER_WINDOW> pitch_filter{16384};
 
-    /*
-      Initialization sequence
-    */
-    GPS::gps gps_sensor;
-    SDCard::SDCard sd_card;
+    /***********************
+    HARDWARE INITIALIZATION
+    ************************/
+    Encoder yaw_encoder(&hspi1, ENCODER_YAW_CS_PORT, ENCODER_YAW_CS_PIN);
+    Encoder pitch_encoder(&hspi1, ENCODER_PITCH_CS_PORT, ENCODER_PITCH_CS_PIN);
 
+    GPS gps(&huart6);
+    IMU imu(&hi2c1);
+    RasPi raspi(&huart1);
+    SDCard sd_card();
+
+    Touchscreen touchscreen(&hspi1,
+        LCD_CS_PORT,  LCD_CS_PIN,
+        LCD_RST_PORT, LCD_RST_PIN,
+        LCD_LED_PORT, LCD_LED_PIN,
+        LCD_DC_PORT,  LCD_DC_PIN);  // cs, rst, led, dc
+    Touch xpt;
+
+
+    /***********************
+    TIMING
+    ************************/
     constexpr uint32_t IMU_INTERVAL_MS = 100; // 10 Hz
     constexpr uint32_t GPS_INTERVAL_MS = 1000; // 1 Hz
     constexpr uint32_t ENCODER_INTERVAL_MS = 100; // 10 Hz
@@ -98,64 +106,60 @@ namespace telescope {
     uint32_t last_touch_tick = 0;
     uint32_t last_sm_tick = 0;
 
-    StateMachine* state_machine = nullptr;
+    /***********************
+    STATE MACHINE
+    ************************/
+    StateMachine state_machine(touchscreen, sdcard, raspi);
 
     auto init() -> void {
         const char* msg = "telescope init\r\n";
         HAL_UART_Transmit(&huart3, reinterpret_cast<const uint8_t*>(msg), 16, 100);
 
-        raspi::init(&huart1);
-        imu::init(&hi2c1);
-        gps_sensor.init(&huart6);
+        raspi.init();
 
-        static encoder::Encoder yaw_enc(&hspi1, ENCODER_YAW_CS_PORT, ENCODER_YAW_CS_PIN, YAW_OFFSET);
-        yaw_encoder = &yaw_enc;
-        yaw_encoder->clear_error();
+        imu.init();
+        gps.init();
 
-        static encoder::Encoder pitch_enc(&hspi1, ENCODER_PITCH_CS_PORT, ENCODER_PITCH_CS_PIN, PITCH_OFFSET);
-        pitch_encoder = &pitch_enc;
-        pitch_encoder->clear_error();
+        yaw_encoder.clear_error();
+        pitch_encoder.clear_error();
 
-        xpt.init();
         touchscreen.init();
         touchscreen.draw_main();
 
-        int sd_result = sd_card.mount();
-        char sd_msg[48];
-        int sd_len = snprintf(sd_msg, sizeof(sd_msg), "SD mount: %s\r\n", sd_result == 0 ? "OK" : "FAIL");
-        HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(sd_msg), static_cast<uint16_t>(sd_len), 100);
+        xpt.init(); 
+        //TODO: ADD ANYTHING ELSE TO INITIALIZE THE TOUCH SCREEN HERE
 
-        static StateMachine sm(touchscreen, sd_card);
-        sm.init();
-        state_machine = &sm;
+        sdcard.mount();
+        sdcard.open_catalogue("catalogue.bin");
+
+        state_machine.init();
     }
 
+    //TODO: MOVE THIS ELSEWHERE
     bool prev_button_pressed = false;
-
-    #define DEBUG_BUTTON_PORT GPIOC
-    #define DEBUG_BUTTON_PIN  GPIO_PIN_4
 
     [[noreturn]] auto loop() -> void {
         for (;;) {
-            raspi::process();
-            gps_sensor.process();
+            // Send periodic sensor updates to the raspi
+            raspi.process();
+            gps.process();
 
             uint32_t now = HAL_GetTick();
 
             if (now - last_imu_tick >= IMU_INTERVAL_MS) {
                 last_imu_tick = now;
-                if (imu::update()) {
-                    ImuPayload payload{};
-                    payload.heading = imu_filter.update(imu::heading());
-                    payload.calibration = imu::calibration();
-                    raspi::send_imu(payload);
+                if (imu.update()) {
+                    IMUPayload payload{};
+                    payload.heading = imu_filter.update(imu.get_heading());
+                    payload.calibration = imu.get_calibration();
+                    raspi.send_imu(payload);
                 }
             }
 
             if (now - last_gps_tick >= GPS_INTERVAL_MS) {
                 last_gps_tick = now;
-                if (gps_sensor.has_fix()) {
-                    raspi::send_gps(gps_sensor.payload());
+                if (gps.has_fix()) {
+                    raspi.send_gps(gps.payload());
                 }
             }
 
@@ -163,36 +167,37 @@ namespace telescope {
                 last_encoder_tick = now;
                 EncoderPayload payload{};
                 uint16_t raw = 0;
-                bool yaw_ok = (yaw_encoder->read_raw_angle(raw, true) == HAL_OK);
+                bool yaw_ok = (yaw_encoder.read_raw_angle(raw, true) == HAL_OK);
                 if (yaw_ok) payload.yaw_raw = yaw_filter.update(raw);
-                bool pitch_ok = (pitch_encoder->read_raw_angle(raw) == HAL_OK);
+                bool pitch_ok = (pitch_encoder.read_raw_angle(raw) == HAL_OK);
                 if (pitch_ok) payload.pitch_raw = pitch_filter.update(raw);
-                if (yaw_ok || pitch_ok) raspi::send_encoder(payload);
+                if (yaw_ok || pitch_ok) raspi.send_encoder(payload);
             }
 
             if (now - last_serial_tick >= SERIAL_INTERVAL_MS) {
                 last_serial_tick = now;
-                bool imu_ok = imu::update();
-                uint8_t cal = imu::calibration();
+                bool imu_ok = imu.update();
+                uint8_t cal = imu.get_calibration();
                 float yaw_deg = 0.0f;
                 float pitch_deg = 0.0f;
-                yaw_encoder->read_angle_deg(yaw_deg, true);
-                pitch_encoder->read_angle_deg(pitch_deg);
+                yaw_encoder.read_angle_deg(yaw_deg, true); //TODO: DID THIS FUNCTION CHANGE?
+                pitch_encoder.read_angle_deg(pitch_deg);
                 char buf[120];
                 int len = snprintf(buf, sizeof(buf),
                                    "IMU: %s  HDG: %.1f  CAL: S%d G%d A%d M%d  GPS: %s  SAT: %d  YAW: %.1f  PIT: %.1f\r\n",
                                    imu_ok ? "OK" : "FAIL",
-                                   static_cast<float>(imu::heading()) / 16.0f,
+                                   static_cast<float>(imu.get_heading()) / 16.0f,
                                    (cal >> 6) & 3, (cal >> 4) & 3,
                                    (cal >> 2) & 3, cal & 3,
-                                   gps_sensor.has_fix() ? "FIX" : "---",
-                                   gps_sensor.num_satellites,
+                                   gps.has_fix() ? "FIX" : "---",
+                                   gps.num_satellites,
                                    static_cast<double>(yaw_deg),
                                    static_cast<double>(pitch_deg));
                 HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(buf),
                                   static_cast<uint16_t>(len), 100);
             }
 
+            // Touchscreen input processing 
             if(xpt.touch_pressed() && (now - last_touch_tick >= TOUCH_DEBOUNCE_MS)){
                 last_touch_tick = now;
                 if(xpt.touch_process()){
@@ -201,25 +206,27 @@ namespace telescope {
                 }
             }
 
+            // State machine tick
+            //TODO: I DONT THINK THIS STATE_MACHINE_INTERVAL IS NECESSARY
             if (now - last_sm_tick >= STATE_MACHINE_INTERVAL_MS) {
                 last_sm_tick = now;
                 float yaw_deg_sm = 0.0f;
                 float pitch_deg_sm = 0.0f;
-                yaw_encoder->read_angle_deg(yaw_deg_sm, true);
-                pitch_encoder->read_angle_deg(pitch_deg_sm);
+                yaw_encoder.read_angle_deg(yaw_deg_sm, true); //TODO: DID THIS FUNCTION CHANGE?
+                pitch_encoder.read_angle_deg(pitch_deg_sm);
 
-                float lat = static_cast<float>(gps_sensor.latitude);
-                float lon = static_cast<float>(gps_sensor.longitude);
+                float lat = static_cast<float>(gps.latitude);
+                float lon = static_cast<float>(gps.longitude);
                 UTC time{};
-                time.year = gps_sensor.year;
-                time.month = gps_sensor.month;
-                time.day = gps_sensor.day;
-                time.hour = gps_sensor.utc_hours;
-                time.minute = gps_sensor.utc_minutes;
-                time.second = static_cast<int>(gps_sensor.utc_seconds);
+                time.year = gps.year;
+                time.month = gps.month;
+                time.day = gps.day;
+                time.hour = gps.utc_hours;
+                time.minute = gps.utc_minutes;
+                time.second = static_cast<int>(gps.utc_seconds);
 
-                state_machine->update_sensors(pitch_deg_sm, yaw_deg_sm, lat, lon, time);
-                state_machine->tick();
+                state_machine.update_sensors(pitch_deg_sm, yaw_deg_sm, lat, lon, time);
+                state_machine.tick();
             }
 
             // Button press sends debug packet
@@ -228,7 +235,7 @@ namespace telescope {
                 DebugPayload dbg{};
                 const char* msg = "PING";
                 __builtin_memcpy(dbg.data, msg, 4);
-                raspi::send_debug(dbg);
+                raspi.send_debug(dbg);
             }
             prev_button_pressed = button_pressed;
         }

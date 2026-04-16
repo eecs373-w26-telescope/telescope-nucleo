@@ -19,7 +19,7 @@ enum PacketId : uint8_t {
 	PACKET_DEBUG        = 0xFF,
 };
 
-enum DsoObjectType : uint8_t {
+enum DSOObjectType : uint8_t {
 	DSO_GALAXY           = 0,
 	DSO_NEBULA           = 1,
 	DSO_OPEN_CLUSTER     = 2,
@@ -27,7 +27,7 @@ enum DsoObjectType : uint8_t {
 	DSO_PLANETARY_NEBULA = 4,
 };
 
-enum DsoStatus : uint8_t {
+enum DSOStatus : uint8_t {
 	DSO_OK        = 0,
 	DSO_NOT_FOUND = 1,
 	DSO_SD_ERROR  = 2,
@@ -41,7 +41,7 @@ struct PacketHeader {
 	uint8_t  length;
 };
 
-struct GpsPayload {
+struct GPSPayload {
 	int32_t  latitude_e7;
 	int32_t  longitude_e7;
 	uint8_t  num_satellites;
@@ -58,7 +58,7 @@ struct EncoderPayload {
 	uint16_t pitch_raw;
 };
 
-struct ImuPayload {
+struct IMUPayload {
 	int16_t  heading;
 	uint8_t  calibration;
 };
@@ -69,7 +69,7 @@ struct StateSyncPayload {
 	uint16_t sequence;
 };
 
-struct DsoTargetPayload {
+struct DSOTargetPayload {
 	uint8_t  status;
 	uint16_t catalog_number;
 	uint8_t  object_type;
