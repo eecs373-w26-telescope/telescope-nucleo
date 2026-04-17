@@ -23,6 +23,7 @@ State machine implementation
 #include "stm32f4xx_hal_uart.h"
 #include <cmath>
 #include <cstdio>
+#include <ctime>
 
 // __DATE__ = "Mmm DD YYYY", __TIME__ = "HH:MM:SS"
 namespace build_time {
@@ -244,6 +245,8 @@ namespace telescope {
                 yaw_encoder.read_angle_deg(yaw_deg, true);
                 pitch_encoder.read_angle_deg(pitch_deg);
                 char buf[120];
+                char az_buf[120];
+
                 int len = snprintf(buf, sizeof(buf),
                                    "IMU: %s  HDG: %.1f  CAL: S%d G%d A%d M%d  GPS: %s  SAT: %d  YAW: %.1f  PIT: %.1f\r\n",
                                    imu_ok ? "OK" : "FAIL",
@@ -356,6 +359,67 @@ namespace telescope {
 
                 state_machine.update_sensors(pitch_deg_sm, azimuth_deg, lat, lon, time);
                 state_machine.tick();
+
+                EquatorialCoordinates eqc = state_machine.current_eqc();
+                HorizontalCoordinates hc = state_machine.current_hc();
+                const FOV& fov = state_machine.current_fov();
+
+                char az_buf[120];
+                int az_len = snprintf(az_buf, sizeof(az_buf),
+                    "RAW AZ DEBUG:\r\n"
+                    "  IMU HDG : %.2f deg\r\n"
+                    "  YAW ENC : %.2f deg\r\n"
+                    "  FINAL AZ: %.2f deg\r\n",
+                    static_cast<double>(filtered_imu_heading_deg),
+                    static_cast<double>(yaw_deg_sm),
+                    static_cast<double>(azimuth_deg)
+                );
+                HAL_UART_Transmit(&huart3,
+                    reinterpret_cast<uint8_t*>(az_buf),
+                    static_cast<uint16_t>(az_len),
+                    100);
+
+                char astro_buf[256];
+                int astro_len = snprintf(astro_buf, sizeof(astro_buf),
+                    "ASTRO:\r\n"
+                    "  ALT: %.2f deg\r\n"
+                    "  AZ : %.2f deg\r\n"
+                    "  LAT: %.5f  LON: %.5f\r\n"
+                    "  UTC: %04d-%02d-%02d %02d:%02d:%02d\r\n"
+                    "  RA : %.2f hr\r\n"
+                    "  DEC: %.2f deg\r\n"
+                    "  FOV r: %.2f deg  objs:%d%s\r\n",
+                    static_cast<double>(hc.altitude),
+                    static_cast<double>(hc.azimuth),
+                    static_cast<double>(lat),
+                    static_cast<double>(lon),
+                    time.year, time.month, time.day,
+                    time.hour, time.minute, time.second,
+                    static_cast<double>(eqc.right_ascension),
+                    static_cast<double>(eqc.declination),
+                    static_cast<double>(fov.radius),
+                    static_cast<int>(fov.objects.size()),
+                    gps.has_fix() ? "" : " [FALLBACK]"
+                );
+                HAL_UART_Transmit(&huart3,
+                    reinterpret_cast<uint8_t*>(astro_buf),
+                    static_cast<uint16_t>(astro_len),
+                    100);
+
+                for (const auto& obj : fov.objects) {
+                    char obj_buf[96];
+                    int obj_len = snprintf(obj_buf, sizeof(obj_buf),
+                        "  %s RA=%.2f DEC=%.2f mag=%.1f\r\n",
+                        obj.name.c_str(),
+                        static_cast<double>(obj.pos.right_ascension),
+                        static_cast<double>(obj.pos.declination),
+                        static_cast<double>(obj.brightness)
+                    );
+                    HAL_UART_Transmit(&huart3,
+                        reinterpret_cast<uint8_t*>(obj_buf),
+                        static_cast<uint16_t>(obj_len),
+                        100);
+                }
             }
 
             // Button press sends debug packet
