@@ -114,6 +114,22 @@ private:
         return false;
     }
 
+    bool lookup_target_globally(int messier_id) {
+        const std::string target_name = "M" + std::to_string(messier_id);
+        std::vector<DSO> results;
+        if (sdcard_.search_objects_in_bounds(0.0f, 359.99f, -90.0f, 90.0f, results) != 0) {
+            return false;
+        }
+        for (const auto& obj : results) {
+            if (obj.name == target_name) {
+                selected_object_ = obj;
+                has_selected_object_ = true;
+                return true;
+            }
+        }
+        return false;
+    }
+
     void send_dso_target_packet() {
         DSOTargetPayload pkt{};
         pkt.status         = DSO_OK;
@@ -152,7 +168,9 @@ private:
         if (search_requested_) {
             search_requested_ = false;
             cancel_requested_ = false;
-            try_select_target_from_current_fov(selected_messier_id_);
+            if (!try_select_target_from_current_fov(selected_messier_id_)) {
+                lookup_target_globally(selected_messier_id_);
+            }
             send_dso_target_packet();
             target_full_sent_ = has_selected_object_;
             transition(TelescopeState::SEARCH);

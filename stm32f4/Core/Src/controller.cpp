@@ -135,6 +135,7 @@ namespace telescope {
     constexpr uint32_t STATE_MACHINE_HZ = 10;
     constexpr uint32_t AZ_DEBUG_HZ      = 5;
     constexpr uint32_t ASTRO_DEBUG_HZ   = 5;
+    constexpr uint32_t SG_DEBUG_HZ      = 5;
 
     constexpr uint32_t IMU_INTERVAL_MS           = hz_to_ms(IMU_HZ);
     constexpr uint32_t GPS_INTERVAL_MS           = hz_to_ms(GPS_HZ);
@@ -144,6 +145,7 @@ namespace telescope {
     constexpr uint32_t STATE_MACHINE_INTERVAL_MS = hz_to_ms(STATE_MACHINE_HZ);
     constexpr uint32_t AZ_DEBUG_INTERVAL_MS      = hz_to_ms(AZ_DEBUG_HZ);
     constexpr uint32_t ASTRO_DEBUG_INTERVAL_MS   = hz_to_ms(ASTRO_DEBUG_HZ);
+    constexpr uint32_t SG_DEBUG_INTERVAL_MS      = hz_to_ms(SG_DEBUG_HZ);
 
     float filtered_imu_heading_deg = 0.0f;
     uint16_t filtered_yaw_raw   = 0;
@@ -157,6 +159,7 @@ namespace telescope {
     uint32_t last_sm_tick = 0;
     uint32_t last_az_debug_tick = 0;
     uint32_t last_astro_debug_tick = 0;
+    uint32_t last_sg_debug_tick = 0;
 
     /***********************
     STATE MACHINE
@@ -427,6 +430,19 @@ namespace telescope {
                             std::min(dist_deg * 100.0f, 32767.0f));
                     }
                     raspi.send_search_guidance(sg);
+
+                    if (now - last_sg_debug_tick >= SG_DEBUG_INTERVAL_MS) {
+                        last_sg_debug_tick = now;
+                        char sg_buf[96];
+                        int sg_len = snprintf(sg_buf, sizeof(sg_buf),
+                            "SG: has_tgt=%d dx=%.4f dy=%.4f dist=%.2fdeg\r\n",
+                            sg.has_target,
+                            sg.dx_e4 / 10000.0f,
+                            sg.dy_e4 / 10000.0f,
+                            sg.distance_e2 / 100.0f);
+                        HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(sg_buf),
+                                          static_cast<uint16_t>(sg_len), 100);
+                    }
                 }
 
                 EquatorialCoordinates eqc = state_machine.current_eqc();
