@@ -24,6 +24,11 @@ public:
 
     HorizontalCoordinates get_horizontal() const;
 
+    static void project_gnomonic(const EquatorialCoordinates& center,
+                                 const EquatorialCoordinates& obj,
+                                 float fov_radius_deg,
+                                 float& x_out, float& y_out);
+
 private:
     const Telescope telescope;
     telescope::SDCard& db;

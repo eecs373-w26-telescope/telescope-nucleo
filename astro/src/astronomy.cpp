@@ -128,7 +128,7 @@ void Astronomy::convert_hc_to_eqc() {
 void Astronomy::calculate_FOV() {
     current_FOV.center_pos = eqc;
     // current_FOV.radius = telescope.approximate_FOV_radius_deg(); // TODO: IMPLEMENT
-    current_FOV.radius = 50.0f;
+    current_FOV.radius = 10.0f;
     current_FOV.objects.clear();
 }
 
@@ -222,4 +222,25 @@ int Astronomy::find_objects_within_FOV() {
 
 HorizontalCoordinates Astronomy::get_horizontal() const {
     return hc;
+}
+
+void Astronomy::project_gnomonic(const EquatorialCoordinates& center,
+                                 const EquatorialCoordinates& obj,
+                                 float fov_radius_deg,
+                                 float& x_out, float& y_out) {
+    const double ra0  = center.right_ascension * 15.0 * M_PI / 180.0;
+    const double dec0 = center.declination * M_PI / 180.0;
+    const double ra   = obj.right_ascension * 15.0 * M_PI / 180.0;
+    const double dec  = obj.declination * M_PI / 180.0;
+
+    const double dRA = ra - ra0;
+    const double D   = std::sin(dec0) * std::sin(dec) +
+                       std::cos(dec0) * std::cos(dec) * std::cos(dRA);
+
+    const double safe_D = (std::abs(D) < 1e-9) ? 1e-9 : D;
+    const double fov_radius_rad = fov_radius_deg * M_PI / 180.0;
+
+    x_out = static_cast<float>((std::cos(dec) * std::sin(dRA) / safe_D) / fov_radius_rad);
+    y_out = static_cast<float>(((std::cos(dec0) * std::sin(dec) -
+                                 std::sin(dec0) * std::cos(dec) * std::cos(dRA)) / safe_D) / fov_radius_rad);
 }
