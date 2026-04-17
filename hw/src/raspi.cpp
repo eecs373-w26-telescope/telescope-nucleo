@@ -86,7 +86,7 @@ namespace telescope {
             }
             break;
 
-        case PACKET_DSO_REQUEST:
+        case PACKET_DSO_TARGET:
             // SD card read and response will be wired in when SD driver is implemented
             break;
 
@@ -136,7 +136,7 @@ namespace telescope {
         return true;
     }
 
-    bool RasPi::send_gps(const GpsPayload& p) {
+    bool RasPi::send_gps(const GPSPayload& p) {
         return send_packet(PACKET_GPS, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
     }
 
@@ -144,16 +144,12 @@ namespace telescope {
         return send_packet(PACKET_ENCODER, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
     }
 
-    bool RasPi::send_imu(const ImuPayload& p) {
+    bool RasPi::send_imu(const IMUPayload& p) {
         return send_packet(PACKET_IMU, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
     }
 
-    bool RasPi::send_touch_event(const TouchEventPayload& p) {
-        return send_packet(PACKET_TOUCH_EVENT, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
-    }
-
-    bool RasPi::send_dso_response(const DsoResponsePayload& p) {
-        return send_packet(PACKET_DSO_RESPONSE, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
+    bool RasPi::send_state_sync(const StateSyncPayload& p) {
+        return send_packet(PACKET_STATE_SYNC, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
     }
 
     bool RasPi::send_debug(const DebugPayload& p) {
@@ -179,5 +175,6 @@ namespace telescope {
             HAL_UARTEx_ReceiveToIdle_DMA(uart_, rx_dma_buf_, RX_BUF_SIZE);
             __HAL_DMA_DISABLE_IT(uart_->hdmarx, DMA_IT_HT);
         }
+    }
 
 } // namespace telescope

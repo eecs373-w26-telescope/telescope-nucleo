@@ -21,9 +21,11 @@ public:
     };
 
     StateMachine(Touchscreen& touchscreen,
-                 SDCard& sdcard)
+                 SDCard& sdcard,
+                 RasPi& raspi)
         : touchscreen_(touchscreen),
           sdcard_(sdcard),
+          raspi_(raspi),
           telescope_cfg_{},
           astronomy_(telescope_cfg_, sdcard_) {}
 
@@ -107,7 +109,7 @@ private:
         payload.state = static_cast<uint8_t>(current_state_);
         payload.flags = 0;
         payload.sequence = state_sequence_++;
-        raspi::send_state_sync(payload);
+        raspi_.send_state_sync(payload);
     }
 
     void handle_init() {
@@ -173,7 +175,8 @@ private:
     }
 
     Touchscreen& touchscreen_;
-    SDCard::SDCard& sdcard_;
+    SDCard& sdcard_;
+    RasPi& raspi_;
 
     Telescope telescope_cfg_;
     Astronomy astronomy_;

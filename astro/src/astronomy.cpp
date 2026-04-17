@@ -8,7 +8,7 @@
 //TODO: MAKE SURE CONSISTENT RAD OR DEG
 
 
-Astronomy::Astronomy(const Telescope& telescope, SDCard::SDCard& db)
+Astronomy::Astronomy(const Telescope& telescope, telescope::SDCard& db)
     : telescope(telescope), db(db) {}
 
 

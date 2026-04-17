@@ -6,7 +6,7 @@
 
 class Astronomy {
 public:
-    Astronomy(const Telescope& telescope, SDCard::SDCard& sdcard);
+    Astronomy(const Telescope& telescope, telescope::SDCard& sdcard);
 
     EquatorialCoordinates get_equatorial_coordinates() {return eqc;}
     HorizontalCoordinates get_horizontal_coordinates() {return hc;}
@@ -24,7 +24,7 @@ public:
 
 private:
     const Telescope telescope;
-    SDCard::SDCard& db;
+    telescope::SDCard& db;
 
     GeographicCoordinates gc;  // deg
     HorizontalCoordinates hc;  // shifted altitude/azimuth (deg)

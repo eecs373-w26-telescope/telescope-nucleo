@@ -79,7 +79,7 @@ namespace telescope {
     GPS gps(&huart6);
     IMU imu(&hi2c1);
     RasPi raspi(&huart1);
-    SDCard sd_card();
+    SDCard sd_card{};
 
     Touchscreen touchscreen(&hspi1,
         LCD_CS_PORT,  LCD_CS_PIN,
@@ -109,7 +109,7 @@ namespace telescope {
     /***********************
     STATE MACHINE
     ************************/
-    StateMachine state_machine(touchscreen, sdcard, raspi);
+    StateMachine state_machine(touchscreen, sd_card, raspi);
 
     auto init() -> void {
         const char* msg = "telescope init\r\n";
@@ -129,8 +129,8 @@ namespace telescope {
         xpt.init(); 
         //TODO: ADD ANYTHING ELSE TO INITIALIZE THE TOUCH SCREEN HERE
 
-        sdcard.mount();
-        sdcard.open_catalogue("catalogue.bin");
+        sd_card.mount();
+        sd_card.open_catalogue("catalogue.bin");
 
         state_machine.init();
     }
@@ -167,7 +167,7 @@ namespace telescope {
                 last_encoder_tick = now;
                 EncoderPayload payload{};
                 uint16_t raw = 0;
-                bool yaw_ok = (yaw_encoder.read_raw_angle(raw, true) == HAL_OK);
+                bool yaw_ok = (yaw_encoder.read_raw_angle(raw) == HAL_OK);
                 if (yaw_ok) payload.yaw_raw = yaw_filter.update(raw);
                 bool pitch_ok = (pitch_encoder.read_raw_angle(raw) == HAL_OK);
                 if (pitch_ok) payload.pitch_raw = pitch_filter.update(raw);
@@ -180,7 +180,7 @@ namespace telescope {
                 uint8_t cal = imu.get_calibration();
                 float yaw_deg = 0.0f;
                 float pitch_deg = 0.0f;
-                yaw_encoder.read_angle_deg(yaw_deg, true); //TODO: DID THIS FUNCTION CHANGE?
+                yaw_encoder.read_angle_deg(yaw_deg); //TODO: DID THIS FUNCTION CHANGE?
                 pitch_encoder.read_angle_deg(pitch_deg);
                 char buf[120];
                 int len = snprintf(buf, sizeof(buf),
@@ -212,7 +212,7 @@ namespace telescope {
                 last_sm_tick = now;
                 float yaw_deg_sm = 0.0f;
                 float pitch_deg_sm = 0.0f;
-                yaw_encoder.read_angle_deg(yaw_deg_sm, true); //TODO: DID THIS FUNCTION CHANGE?
+                yaw_encoder.read_angle_deg(yaw_deg_sm); //TODO: DID THIS FUNCTION CHANGE?
                 pitch_encoder.read_angle_deg(pitch_deg_sm);
 
                 float lat = static_cast<float>(gps.latitude);
@@ -255,16 +255,16 @@ void Loop() {
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef* huart) {
     if (huart->Instance == USART1) {
-        raspi::tx_complete_callback();
+        telescope::raspi.tx_complete_callback();
     }
 }
 
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef* huart, uint16_t Size) {
     if (huart->Instance == USART1) {
-        raspi::rx_event_callback(Size);
+        telescope::raspi.rx_event_callback(Size);
     }
     if (huart->Instance == USART6) {
-        telescope::gps_sensor.rx_event_callback(Size);
+        telescope::gps.rx_event_callback(Size);
     }
 }
 

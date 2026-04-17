@@ -17,8 +17,7 @@ namespace telescope {
     class Encoder{
         public:
             Encoder(SPI_HandleTypeDef* hspi, GPIO_TypeDef* csPort,  uint16_t csPin);
-            auto init() = default; // TODO: add init function for DMA 
-    
+
             HAL_StatusTypeDef read_raw_angle(uint16_t& rawAngle);
             HAL_StatusTypeDef read_angle_deg(float& angleDeg);
             HAL_StatusTypeDef clear_error();

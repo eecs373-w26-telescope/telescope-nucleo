@@ -181,8 +181,8 @@ namespace telescope {
         return fix;
     }
 
-    GpsPayload GPS::payload() const {
-        GpsPayload p{};
+    GPSPayload GPS::payload() const {
+        GPSPayload p{};
         p.latitude_e7 = static_cast<int32_t>(latitude * 1e7);
         p.longitude_e7 = static_cast<int32_t>(longitude * 1e7);
         p.num_satellites = num_satellites;

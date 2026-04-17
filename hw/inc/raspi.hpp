@@ -11,9 +11,9 @@ namespace telescope {
 
     class RasPi{
     public:
-        RasPi(UART_HandleTypeDef* huart) : 
-            uart_{huart}, tx_busy_{false}, rx_read_pos_{0}, current_state_{0},
-            last_state_sync_tick_{HAL_GetTick()}, decoder_{Decoder{}} {}
+        RasPi(UART_HandleTypeDef* huart) :
+            uart_{huart}, decoder_{Decoder{}}, tx_busy_{false}, rx_read_pos_{0},
+            current_state_{0}, last_state_sync_tick_{HAL_GetTick()} {}
         void init();
 
         // Call from main loop to consume DMA RX bytes and dispatch packets
@@ -26,8 +26,7 @@ namespace telescope {
         bool send_gps(const GPSPayload& payload);
         bool send_encoder(const EncoderPayload& payload);
         bool send_imu(const IMUPayload& payload);
-        bool send_touch_event(const TouchEventPayload& payload);
-        bool send_dso_response(const DSOResponsePayload& payload);
+        bool send_state_sync(const StateSyncPayload& payload);
         bool send_debug(const DebugPayload& payload);
 
         // Current mirrored state from raspi (updated by STATE_SYNC packets)
@@ -77,8 +76,8 @@ namespace telescope {
         volatile uint8_t current_state_ = 0;
         volatile uint32_t last_state_sync_tick_ = 0;
 
-        void RasPi::dispatch_packet(uint8_t packet_id, const uint8_t* payload, uint8_t length);
-        void RasPi::process_byte(uint8_t byte);
+        void dispatch_packet(uint8_t packet_id, const uint8_t* payload, uint8_t length);
+        void process_byte(uint8_t byte);
     };
 
 

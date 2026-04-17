@@ -4,12 +4,6 @@
 #include <cstring>
 
 
-static constexpr uint16_t AS5048_NOP       = 0x0000;
-static constexpr uint16_t AS5048_CLRERR    = 0x0001;
-static constexpr uint16_t AS5048_DIAG_AGC  = 0x3FFD;
-static constexpr uint16_t AS5048_MAG       = 0x3FFE;
-static constexpr uint16_t AS5048_ANGLE     = 0x3FFF;
-
 namespace telescope {
 
     //Constructor
@@ -80,16 +74,16 @@ namespace telescope {
         uint16_t rx2 = 0;
 
         uint16_t readCmd = build_read_command(addr);
-        uint16_t emptyCmd = build_frame(encoder_reg.AS5048_NOP);
+        uint16_t emptyCmd = build_frame(encoder_reg::AS5048_NOP);
 
         //Send Read Command
-        HAL_StatusTypeDef status = transfer16(readCmd, rx1);
+        HAL_StatusTypeDef status = transfer_16(readCmd, rx1);
         if(status != HAL_OK){
             return status;
         }
 
         // Get the data
-        status = transfer16(emptyCmd, rx2);
+        status = transfer_16(emptyCmd, rx2);
         if(status != HAL_OK){
             return status;
         }
@@ -103,7 +97,7 @@ namespace telescope {
     }
 
     HAL_StatusTypeDef Encoder::read_raw_angle(uint16_t& rawangle){
-        return read_register(encoder_reg.AS5048_ANGLE, rawangle);
+        return read_register(encoder_reg::AS5048_ANGLE, rawangle);
     }
 
     HAL_StatusTypeDef Encoder::read_angle_deg(float& angleDeg){
@@ -119,6 +113,6 @@ namespace telescope {
     
     HAL_StatusTypeDef Encoder::clear_error(){
         uint16_t dummy = 0;
-        return read_register(encoder_reg.AS5048_CLRERR, dummy);
+        return read_register(encoder_reg::AS5048_CLRERR, dummy);
     }
 } //namespace telescope
