@@ -50,7 +50,6 @@ struct FOV {
     std::vector<DSO> objects;
 };
 
-// TODO: mildly out of place?
 struct Telescope {
     float objective_lens_diameter{70.0f}; //mm
     float eyepiece_focal_length{20.0f}; //mm
@@ -67,7 +66,7 @@ struct Telescope {
     float approximate_FOV_radius_deg() const {
         const float mag = magnification();
         if (mag <= 0.0f) return 0.0f;
-        return eyepiece_apparent_fov_deg / mag;
+        return eyepiece_apparent_fov_deg / (2.0f * mag);
     }
 
     float jank_FOV_radius_deg() const {return 1.25;}

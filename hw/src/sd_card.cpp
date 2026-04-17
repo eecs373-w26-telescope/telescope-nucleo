@@ -124,47 +124,66 @@ int SDCard::search_objects_in_bounds(float ra_min_deg,
         return -1;
     }
 
-    // Coarse bin bounds
-    const int ra_bin_min = compute_bin_id(ra_min_deg, dec_min_deg, header_.ra_bins, header_.dec_bins) % header_.ra_bins;
-    const int ra_bin_max = compute_bin_id(ra_max_deg, dec_min_deg, header_.ra_bins, header_.dec_bins) % header_.ra_bins;
+    const int n_ra = static_cast<int>(header_.ra_bins);
+    const float ra_bin_width = 360.0f / static_cast<float>(n_ra);
+
+    // Normalize to [0, 360) and detect wrap
+    const float ra_span = ra_max_deg - ra_min_deg;
+    const bool full_circle = ra_span >= 360.0f;
+    const float ra_lo = std::fmod(std::fmod(ra_min_deg, 360.0f) + 360.0f, 360.0f);
+    const float ra_hi = std::fmod(std::fmod(ra_max_deg, 360.0f) + 360.0f, 360.0f);
+    const bool ra_wraps = !full_circle && (ra_lo > ra_hi);
+
+    const int ra_bin_lo = static_cast<int>(ra_lo / ra_bin_width);
+    const int ra_bin_hi = std::min(static_cast<int>(ra_hi / ra_bin_width), n_ra - 1);
 
     const int dec_bin_min = std::max(0, static_cast<int>((dec_min_deg + 90.0f) / (180.0f / header_.dec_bins)));
     const int dec_bin_max = std::min(static_cast<int>(header_.dec_bins) - 1,
                                      static_cast<int>((dec_max_deg + 90.0f) / (180.0f / header_.dec_bins)));
 
-    // Simple version: assume no RA wrap for now
+    auto scan_dec_ra = [&](int dec_bin, int ra_bin) -> int {
+        const uint32_t bin_id = static_cast<uint32_t>(dec_bin) * header_.ra_bins + static_cast<uint32_t>(ra_bin);
+        BinIndex idx{};
+        if (read_bin_index(bin_id, idx) != 0) return -1;
+        if (idx.count == 0) return 0;
+        if (f_lseek(&file_, idx.offset) != FR_OK) return -1;
+
+        for (uint32_t i = 0; i < idx.count; ++i) {
+            BinObjectRecord rec{};
+            if (read_object_at_current_pos(rec) != 0) return -1;
+
+            const float ra = std::fmod(std::fmod(rec.ra_deg, 360.0f) + 360.0f, 360.0f);
+            const bool in_ra = full_circle
+                ? true
+                : (ra_wraps ? (ra >= ra_lo || ra <= ra_hi) : (ra >= ra_lo && ra <= ra_hi));
+
+            if (in_ra && rec.dec_deg >= dec_min_deg && rec.dec_deg <= dec_max_deg) {
+                DSO obj{};
+                obj.name = "M" + std::to_string(rec.id);
+                obj.pos.right_ascension = rec.ra_deg / 15.0f;
+                obj.pos.declination = rec.dec_deg;
+                obj.brightness = rec.mag;
+                out_objects.emplace_back(obj);
+            }
+        }
+        return 0;
+    };
+
     for (int dec_bin = dec_bin_min; dec_bin <= dec_bin_max; ++dec_bin) {
-        for (int ra_bin = ra_bin_min; ra_bin <= ra_bin_max; ++ra_bin) {
-            const uint32_t bin_id = dec_bin * header_.ra_bins + ra_bin;
-
-            BinIndex idx{};
-            if (read_bin_index(bin_id, idx) != 0) {
-                return -1;
+        if (full_circle) {
+            for (int ra_bin = 0; ra_bin < n_ra; ++ra_bin) {
+                if (scan_dec_ra(dec_bin, ra_bin) != 0) return -1;
             }
-
-            if (idx.count == 0) {
-                continue;
+        } else if (!ra_wraps) {
+            for (int ra_bin = ra_bin_lo; ra_bin <= ra_bin_hi; ++ra_bin) {
+                if (scan_dec_ra(dec_bin, ra_bin) != 0) return -1;
             }
-
-            if (f_lseek(&file_, idx.offset) != FR_OK) {
-                return -1;
+        } else {
+            for (int ra_bin = ra_bin_lo; ra_bin < n_ra; ++ra_bin) {
+                if (scan_dec_ra(dec_bin, ra_bin) != 0) return -1;
             }
-
-            for (uint32_t i = 0; i < idx.count; ++i) {
-                BinObjectRecord rec{};
-                if (read_object_at_current_pos(rec) != 0) {
-                    return -1;
-                }
-
-                if (rec.ra_deg >= ra_min_deg && rec.ra_deg <= ra_max_deg &&
-                    rec.dec_deg >= dec_min_deg && rec.dec_deg <= dec_max_deg) {
-                    DSO obj{};
-                    obj.name = "M" + std::to_string(rec.id);
-                    obj.pos.right_ascension = rec.ra_deg / 15.0f; // convert deg -> hours
-                    obj.pos.declination = rec.dec_deg;
-                    obj.brightness = rec.mag;
-                    out_objects.emplace_back(obj);
-                }
+            for (int ra_bin = 0; ra_bin <= ra_bin_hi; ++ra_bin) {
+                if (scan_dec_ra(dec_bin, ra_bin) != 0) return -1;
             }
         }
     }

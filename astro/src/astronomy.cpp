@@ -31,7 +31,7 @@ double Astronomy::angular_distance_deg(const EquatorialCoordinates& a,
     std::cos(dec1) * std::cos(dec2) * std::cos(ra1 - ra2);
 
     cos_theta = std::max(-1.0, std::min(1.0, cos_theta));
-    return static_cast<float>(rad2deg(std::acos(cos_theta)));
+    return rad2deg(std::acos(cos_theta));
 }
 
 int Astronomy::calculate_adjusted_altitude(int raw_altitude_deg) const {
@@ -82,18 +82,19 @@ void Astronomy::convert_hc_to_eqc() {
 
     // 3.) calculate local sidereal time
     // calculate julian date (Y, M, D) from UTC (h, m, s)
-    if (utc.month <=2) {utc.year--; utc.month+=12;}
+    UTC jd_utc = utc;
+    if (jd_utc.month <= 2) { jd_utc.year--; jd_utc.month += 12; }
 
-    int A = static_cast<int>(std::floor(utc.year / 100.0));
+    int A = static_cast<int>(std::floor(jd_utc.year / 100.0));
     int B = 2 - A + static_cast<int>(std::floor(A / 4.0));
 
-    double day_frac = utc.day + (utc.hour / 24.0)
-                              + (utc.minute / 1440.0)
-                              + (utc.second / 86400.0);
-    
-    double JD = std::floor(365.25 * (utc.year + 4716)) +
-                std::floor(30.6001 * (utc.month+1)) + 
-                day_frac + B - 1524.5; //TODO: CHECK THIS EQUATION
+    double day_frac = jd_utc.day + (jd_utc.hour / 24.0)
+                                 + (jd_utc.minute / 1440.0)
+                                 + (jd_utc.second / 86400.0);
+
+    double JD = std::floor(365.25 * (jd_utc.year + 4716)) +
+                std::floor(30.6001 * (jd_utc.month + 1)) +
+                day_frac + B - 1524.5;
     
     // calculate greenwich mean standard time
     double d = JD - 2451545.0;
@@ -113,7 +114,8 @@ void Astronomy::convert_hc_to_eqc() {
 
 void Astronomy::calculate_FOV() {
     current_FOV.center_pos = eqc;
-    current_FOV.radius = telescope.approximate_FOV_radius_deg(); // TODO: IMPLEMENT
+    // current_FOV.radius = telescope.approximate_FOV_radius_deg(); // TODO: IMPLEMENT
+    current_FOV.radius = 50.0f;
     current_FOV.objects.clear();
 }
 
@@ -129,7 +131,7 @@ std::vector<DSO> Astronomy::intersected_points(const FOV& new_fov, const FOV& ol
     std::vector<DSO> intersected_objects;
 
     for (const auto& object : old_FOV.objects) {
-        if (is_object_in_FOV(object, old_FOV) && is_object_in_FOV(object, new_fov)) {
+        if (is_object_in_FOV(object, new_fov)) {
             intersected_objects.emplace_back(object);
         }
     }
@@ -143,16 +145,19 @@ void Astronomy::compute_equatorial_bounds(const FOV& fov, float& ra_min_deg, flo
         const float center_ra_deg = fov.center_pos.right_ascension * 15.0f;
         const float center_dec_deg = fov.center_pos.declination;
 
-        ra_min_deg = center_ra_deg - fov.radius;
-        ra_max_deg = center_ra_deg + fov.radius;
+        const float cos_dec = std::cos(center_dec_deg * static_cast<float>(M_PI) / 180.0f);
+        // Cap ra_stretch at 180 so that near-pole pointings still produce a valid
+        // [ra_min, ra_max] range that search_objects_in_bounds can handle (it detects
+        // full-circle coverage when the span >= 360).
+        const float ra_stretch = (cos_dec > 0.01f) ? std::min(fov.radius / cos_dec, 180.0f) : 180.0f;
+
+        ra_min_deg = center_ra_deg - ra_stretch;
+        ra_max_deg = center_ra_deg + ra_stretch;
         dec_min_deg = center_dec_deg - fov.radius;
         dec_max_deg = center_dec_deg + fov.radius;
 
         if (dec_min_deg < -90.0f) dec_min_deg = -90.0f;
         if (dec_max_deg > 90.0f) dec_max_deg = 90.0f;
-
-        // TODO: for now, assume no RA wraparound handling.
-        // Add wrap logic later if FOV crosses 0h / 360°.
 }
 
 

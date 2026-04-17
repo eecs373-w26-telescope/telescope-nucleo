@@ -126,7 +126,7 @@ namespace telescope {
     constexpr uint32_t IMU_INTERVAL_MS = 100; // 10 Hz
     constexpr uint32_t GPS_INTERVAL_MS = 1000; // 1 Hz
     constexpr uint32_t ENCODER_INTERVAL_MS = 100; // 10 Hz
-    constexpr uint32_t SERIAL_INTERVAL_MS = 1000;
+    constexpr uint32_t SERIAL_INTERVAL_MS = 200;
     constexpr uint32_t TOUCH_DEBOUNCE_MS  = 500;
     constexpr uint32_t STATE_MACHINE_INTERVAL_MS = 100; // 10 Hz
     float filtered_imu_heading_deg = 0.0f;
