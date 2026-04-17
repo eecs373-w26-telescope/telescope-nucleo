@@ -23,6 +23,31 @@ State machine implementation
 #include "stm32f4xx_hal_uart.h"
 #include <cstdio>
 
+// __DATE__ = "Mmm DD YYYY", __TIME__ = "HH:MM:SS"
+namespace build_time {
+    constexpr int d(char c) { return c - '0'; }
+    constexpr int month() {
+        const char* s = __DATE__;
+        if (s[0]=='J' && s[1]=='a') return 1;
+        if (s[0]=='F') return 2;
+        if (s[0]=='M' && s[2]=='r') return 3;
+        if (s[0]=='A' && s[1]=='p') return 4;
+        if (s[0]=='M') return 5;
+        if (s[0]=='J' && s[2]=='n') return 6;
+        if (s[0]=='J') return 7;
+        if (s[0]=='A') return 8;
+        if (s[0]=='S') return 9;
+        if (s[0]=='O') return 10;
+        if (s[0]=='N') return 11;
+        return 12;
+    }
+    constexpr int day()    { return (__DATE__[4]==' ' ? 0 : d(__DATE__[4]))*10 + d(__DATE__[5]); }
+    constexpr int year()   { return d(__DATE__[7])*1000 + d(__DATE__[8])*100 + d(__DATE__[9])*10 + d(__DATE__[10]); }
+    constexpr int hour()   { return d(__TIME__[0])*10 + d(__TIME__[1]); }
+    constexpr int minute() { return d(__TIME__[3])*10 + d(__TIME__[4]); }
+    constexpr int second() { return d(__TIME__[6])*10 + d(__TIME__[7]); }
+}
+
 extern "C" UART_HandleTypeDef huart1;
 extern "C" UART_HandleTypeDef huart3;
 extern "C" UART_HandleTypeDef huart6;
@@ -65,7 +90,7 @@ namespace telescope {
     }
 
     // OFFSET HEADING HERE
-    constexpr uint16_t YAW_OFFSET   = deg_to_raw(27.0f);
+    constexpr uint16_t YAW_OFFSET   = deg_to_raw(30.5f);
     constexpr uint16_t PITCH_OFFSET = deg_to_raw(116.6f);
 
     // BNO055 heading: int16_t units of 1/16 deg, full circle = 360 * 16 = 5760
@@ -141,6 +166,13 @@ namespace telescope {
                               mount_res, open_res, sd_card.last_open_error());
         HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(sd_buf), static_cast<uint16_t>(sd_len), 100);
 
+        char time_buf[64];
+        int time_len = snprintf(time_buf, sizeof(time_buf),
+                                "Fallback time: %04d-%02d-%02d %02d:%02d:%02d\r\n",
+                                build_time::year(), build_time::month(), build_time::day(),
+                                build_time::hour(), build_time::minute(), build_time::second());
+        HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(time_buf), static_cast<uint16_t>(time_len), 100);
+
         state_machine.init();
     }
 
@@ -204,9 +236,29 @@ namespace telescope {
                                    static_cast<double>(pitch_deg));
                 HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(buf),
                                   static_cast<uint16_t>(len), 100);
+
+                EquatorialCoordinates eqc = state_machine.current_eqc();
+                char sm_buf[120];
+                int sm_len = snprintf(sm_buf, sizeof(sm_buf),
+                                      "SM: state=%d target=M%d found=%d fov_objs=%d RA=%.2f DEC=%.2f%s\r\n",
+                                      static_cast<int>(state_machine.current_state()),
+                                      state_machine.selected_messier_id(),
+                                      state_machine.has_selected_object() ? 1 : 0,
+                                      state_machine.fov_object_count(),
+                                      static_cast<double>(eqc.right_ascension),
+                                      static_cast<double>(eqc.declination),
+                                      gps.has_fix() ? "" : " [FALLBACK]");
+                HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(sm_buf),
+                                  static_cast<uint16_t>(sm_len), 100);
+
+                StateSyncPayload sync{};
+                sync.state    = static_cast<uint8_t>(state_machine.current_state());
+                sync.flags    = 0;
+                sync.sequence = 0;
+                raspi.send_state_sync(sync);
             }
 
-            // Touchscreen input processing 
+            // Touchscreen input processing
             if(xpt.is_pressed() && (now - last_touch_tick >= TOUCH_DEBOUNCE_MS)){
                 last_touch_tick = now;
                 if(xpt.process()){
@@ -237,15 +289,26 @@ namespace telescope {
                 yaw_encoder.read_angle_deg(yaw_deg_sm, true);
                 pitch_encoder.read_angle_deg(pitch_deg_sm);
 
-                float lat = static_cast<float>(gps.latitude);
-                float lon = static_cast<float>(gps.longitude);
+                constexpr float FALLBACK_LAT = 42.29243326092064f;
+                constexpr float FALLBACK_LON = -83.71498310538729f;
+                float lat = gps.has_fix() ? static_cast<float>(gps.latitude)  : FALLBACK_LAT;
+                float lon = gps.has_fix() ? static_cast<float>(gps.longitude) : FALLBACK_LON;
                 UTC time{};
-                time.year = gps.year;
-                time.month = gps.month;
-                time.day = gps.day;
-                time.hour = gps.utc_hours;
-                time.minute = gps.utc_minutes;
-                time.second = static_cast<int>(gps.utc_seconds);
+                if (gps.has_fix()) {
+                    time.year   = gps.year;
+                    time.month  = gps.month;
+                    time.day    = gps.day;
+                    time.hour   = gps.utc_hours;
+                    time.minute = gps.utc_minutes;
+                    time.second = static_cast<int>(gps.utc_seconds);
+                } else {
+                    time.year   = build_time::year();
+                    time.month  = build_time::month();
+                    time.day    = build_time::day();
+                    time.hour   = build_time::hour();
+                    time.minute = build_time::minute();
+                    time.second = build_time::second();
+                }
 
                 state_machine.update_sensors(pitch_deg_sm, yaw_deg_sm, lat, lon, time);
                 state_machine.tick();

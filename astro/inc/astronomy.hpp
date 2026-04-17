@@ -8,7 +8,7 @@ class Astronomy {
 public:
     Astronomy(const Telescope& telescope, telescope::SDCard& sdcard);
 
-    EquatorialCoordinates get_equatorial_coordinates() {return eqc;}
+    EquatorialCoordinates get_equatorial_coordinates() const {return eqc;}
     HorizontalCoordinates get_horizontal_coordinates() {return hc;}
     const FOV& get_current_fov() const {return current_FOV;}
 

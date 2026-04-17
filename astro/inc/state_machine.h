@@ -64,6 +64,10 @@ public:
 
     TelescopeState current_state() const { return current_state_; }
     int selected_messier_id() const { return selected_messier_id_; }
+    bool has_selected_object() const { return has_selected_object_; }
+    int fov_object_count() const { return static_cast<int>(astronomy_.get_current_fov().objects.size()); }
+    EquatorialCoordinates current_eqc() const { return astronomy_.get_equatorial_coordinates(); }
+    const FOV& current_fov() const { return astronomy_.get_current_fov(); }
 
 private:
     void sample_search_events() {
