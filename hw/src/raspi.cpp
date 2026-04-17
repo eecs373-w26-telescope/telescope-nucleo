@@ -109,7 +109,7 @@ namespace telescope {
     void RasPi::process() {
         if (uart_ == nullptr) return;
 
-        uint16_t write_pos = RX_BUF_SIZE - __HAL_DMA_GET_COUNTER(uart_->hdmarx);
+        uint16_t write_pos = (RX_BUF_SIZE - __HAL_DMA_GET_COUNTER(uart_->hdmarx)) % RX_BUF_SIZE;
 
         while (rx_read_pos_ != write_pos) {
             process_byte(rx_dma_buf_[rx_read_pos_]);
@@ -118,8 +118,13 @@ namespace telescope {
     }
 
     bool RasPi::send_packet(uint8_t packet_id, const uint8_t* payload, uint8_t length) {
-        if (tx_busy_ || uart_ == nullptr) return false;
+        if (uart_ == nullptr) return false;
         if (length > MAX_PAYLOAD_SIZE) return false;
+
+        uint32_t start_wait = HAL_GetTick();
+        while (tx_busy_) {
+            if (HAL_GetTick() - start_wait > 10) return false;
+        }
 
         tx_buf_[0] = SYNC_HI;
         tx_buf_[1] = SYNC_LO;

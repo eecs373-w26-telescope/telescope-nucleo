@@ -1,0 +1,825 @@
+diff --git a/hw/inc/raspi.hpp b/hw/inc/raspi.hpp
+index f998209..c8df955 100644
+--- a/hw/inc/raspi.hpp
++++ b/hw/inc/raspi.hpp
+@@ -4,26 +4,81 @@
+ #include <hw/inc/protocol.h>
+ #include <cstdint>
+ 
+-namespace raspi {
++namespace telescope {
++    constexpr uint16_t RX_BUF_SIZE = 256;
++    constexpr uint16_t TX_BUF_SIZE = 134; // max frame: 4 header + 128 payload + 2 CRC
++    constexpr uint32_t CONNECTION_TIMEOUT_MS = 1000;
+ 
+-void init(UART_HandleTypeDef* huart);
++    class RasPi{
++    public:
++        RasPi(UART_HandleTypeDef* huart) :
++            uart_{huart}, decoder_{Decoder{}}, tx_busy_{false}, rx_read_pos_{0},
++            current_state_{0}, last_state_sync_tick_{HAL_GetTick()} {}
++        void init();
+ 
+-// Call from main loop to consume DMA RX bytes and dispatch packets
+-void process();
++        // Call from main loop to consume DMA RX bytes and dispatch packets
++        void process();
+ 
+-// Frame and transmit a packet via DMA. Returns false if TX is busy.
+-bool send_packet(uint8_t packet_id, const uint8_t* payload, uint8_t length);
++        // Frame and transmit a packet via DMA. Returns false if TX is busy.
++        bool send_packet(uint8_t packet_id, const uint8_t* payload, uint8_t length);
+ 
+-// Convenience wrappers for typed payloads
+-bool send_gps(const GpsPayload& payload);
+-bool send_encoder(const EncoderPayload& payload);
+-bool send_imu(const ImuPayload& payload);
+-bool send_state_sync(const StateSyncPayload& payload);
+-bool send_dso_target(const DsoTargetPayload& payload);
+-bool send_debug(const DebugPayload& payload);
++        // Convenience wrappers for typed payloads
++        bool send_gps(const GPSPayload& payload);
++        bool send_encoder(const EncoderPayload& payload);
++        bool send_imu(const IMUPayload& payload);
++        bool send_state_sync(const StateSyncPayload& payload);
++        bool send_debug(const DebugPayload& payload);
+ 
+-// Called by HAL from ISR context
+-void tx_complete_callback();
+-void rx_event_callback(uint16_t size);
++        // Current mirrored state from raspi (updated by STATE_SYNC packets)
++        uint8_t mirrored_state();
++        bool    connection_active();
+ 
+-} // namespace raspi
++        // Called by HAL from ISR context
++        void tx_complete_callback();
++        void rx_event_callback(uint16_t size);
++
++    private:
++        // Lightweight stream decoder (no heap allocation)
++        enum class RxState : uint8_t {
++            HUNT_SYNC_HI,
++            HUNT_SYNC_LO,
++            READ_HEADER,
++            READ_PAYLOAD,
++            READ_CRC,
++        };
++
++        struct Decoder {
++            RxState  state = RxState::HUNT_SYNC_HI;
++            uint8_t  header_buf[2]{};
++            uint8_t  payload_buf[MAX_PAYLOAD_SIZE]{};
++            uint8_t  crc_buf[2]{};
++            uint8_t  header_pos = 0;
++            uint8_t  payload_pos = 0;
++            uint8_t  crc_pos = 0;
++            uint8_t  expected_len = 0;
++            uint8_t  packet_id = 0;
++            uint32_t crc_errors = 0;
++            uint32_t sync_losses = 0;
++        };
++
++        UART_HandleTypeDef* uart_ = nullptr;
++        Decoder decoder_;
++
++        // TX state
++        uint8_t tx_buf_[TX_BUF_SIZE];
++        volatile bool tx_busy_ = false;
++
++        // RX DMA circular buffer
++        uint8_t rx_dma_buf_[RX_BUF_SIZE];
++        uint16_t rx_read_pos_ = 0;
++
++        // Mirrored state from raspi
++        volatile uint8_t current_state_ = 0;
++        volatile uint32_t last_state_sync_tick_ = 0;
++
++        void dispatch_packet(uint8_t packet_id, const uint8_t* payload, uint8_t length);
++        void process_byte(uint8_t byte);
++    };
++
++
++} // namespace telescope
+diff --git a/hw/src/raspi.cpp b/hw/src/raspi.cpp
+index 30cdc22..3a094e9 100644
+--- a/hw/src/raspi.cpp
++++ b/hw/src/raspi.cpp
+@@ -1,210 +1,180 @@
+ #include <hw/inc/raspi.hpp>
+ #include <cstring>
+ 
+-namespace raspi {
+-namespace {
+-
+-constexpr uint16_t RX_BUF_SIZE = 256;
+-constexpr uint16_t TX_BUF_SIZE = 134; // max frame: 4 header + 128 payload + 2 CRC
+-
+-UART_HandleTypeDef* uart_handle = nullptr;
+-
+-// TX state
+-uint8_t tx_buf[TX_BUF_SIZE];
+-volatile bool tx_busy = false;
+-
+-// RX DMA circular buffer
+-uint8_t rx_dma_buf[RX_BUF_SIZE];
+-uint16_t rx_read_pos = 0;
+-
+-// Lightweight stream decoder (no heap allocation)
+-enum class RxState : uint8_t {
+-	HUNT_SYNC_HI,
+-	HUNT_SYNC_LO,
+-	READ_HEADER,
+-	READ_PAYLOAD,
+-	READ_CRC,
+-};
+-
+-struct Decoder {
+-	RxState  state = RxState::HUNT_SYNC_HI;
+-	uint8_t  header_buf[2]{};
+-	uint8_t  payload_buf[MAX_PAYLOAD_SIZE]{};
+-	uint8_t  crc_buf[2]{};
+-	uint8_t  header_pos = 0;
+-	uint8_t  payload_pos = 0;
+-	uint8_t  crc_pos = 0;
+-	uint8_t  expected_len = 0;
+-	uint8_t  packet_id = 0;
+-	uint32_t crc_errors = 0;
+-	uint32_t sync_losses = 0;
+-};
+-
+-Decoder decoder;
+-
+-void dispatch_packet(uint8_t packet_id, const uint8_t* payload, uint8_t length);
+-
+-void process_byte(uint8_t byte) {
+-	switch (decoder.state) {
+-	case RxState::HUNT_SYNC_HI:
+-		if (byte == SYNC_HI) {
+-			decoder.state = RxState::HUNT_SYNC_LO;
+-		}
+-		break;
+-
+-	case RxState::HUNT_SYNC_LO:
+-		if (byte == SYNC_LO) {
+-			decoder.header_pos = 0;
+-			decoder.state = RxState::READ_HEADER;
+-		} else if (byte == SYNC_HI) {
+-			// stay in HUNT_SYNC_LO
+-		} else {
+-			decoder.sync_losses++;
+-			decoder.state = RxState::HUNT_SYNC_HI;
+-		}
+-		break;
+-
+-	case RxState::READ_HEADER:
+-		decoder.header_buf[decoder.header_pos++] = byte;
+-		if (decoder.header_pos == 2) {
+-			decoder.packet_id = decoder.header_buf[0];
+-			decoder.expected_len = decoder.header_buf[1];
+-			if (decoder.expected_len > MAX_PAYLOAD_SIZE) {
+-				decoder.sync_losses++;
+-				decoder.state = RxState::HUNT_SYNC_HI;
+-			} else if (decoder.expected_len == 0) {
+-				decoder.crc_pos = 0;
+-				decoder.state = RxState::READ_CRC;
+-			} else {
+-				decoder.payload_pos = 0;
+-				decoder.state = RxState::READ_PAYLOAD;
+-			}
+-		}
+-		break;
+-
+-	case RxState::READ_PAYLOAD:
+-		decoder.payload_buf[decoder.payload_pos++] = byte;
+-		if (decoder.payload_pos == decoder.expected_len) {
+-			decoder.crc_pos = 0;
+-			decoder.state = RxState::READ_CRC;
+-		}
+-		break;
+-
+-	case RxState::READ_CRC:
+-		decoder.crc_buf[decoder.crc_pos++] = byte;
+-		if (decoder.crc_pos == 2) {
+-			// Reconstruct frame for CRC verification
+-			uint8_t frame[4 + MAX_PAYLOAD_SIZE];
+-			frame[0] = SYNC_HI;
+-			frame[1] = SYNC_LO;
+-			frame[2] = decoder.packet_id;
+-			frame[3] = decoder.expected_len;
+-			std::memcpy(&frame[4], decoder.payload_buf, decoder.expected_len);
+-
+-			uint16_t computed = crc16_ccitt(frame, 4 + decoder.expected_len);
+-			uint16_t received = static_cast<uint16_t>(decoder.crc_buf[0])
+-			                  | (static_cast<uint16_t>(decoder.crc_buf[1]) << 8);
+-
+-			if (computed == received) {
+-				dispatch_packet(decoder.packet_id, decoder.payload_buf, decoder.expected_len);
+-			} else {
+-				decoder.crc_errors++;
+-			}
+-			decoder.state = RxState::HUNT_SYNC_HI;
+-		}
+-		break;
+-	}
+-}
+-
+-void dispatch_packet(uint8_t packet_id, const uint8_t* payload, uint8_t length) {
+-	(void)packet_id;
+-	(void)payload;
+-	(void)length;
+-}
+-
+-} // anonymous namespace
+-
+-void init(UART_HandleTypeDef* huart) {
+-	uart_handle = huart;
+-	tx_busy = false;
+-	rx_read_pos = 0;
+-	decoder = Decoder{};
+-
+-	HAL_UARTEx_ReceiveToIdle_DMA(uart_handle, rx_dma_buf, RX_BUF_SIZE);
+-	// Disable half-transfer interrupt, we only care about idle line and transfer complete
+-	__HAL_DMA_DISABLE_IT(uart_handle->hdmarx, DMA_IT_HT);
+-}
+-
+-void process() {
+-	if (uart_handle == nullptr) return;
+-
+-	uint16_t write_pos = RX_BUF_SIZE - __HAL_DMA_GET_COUNTER(uart_handle->hdmarx);
+-
+-	while (rx_read_pos != write_pos) {
+-		process_byte(rx_dma_buf[rx_read_pos]);
+-		rx_read_pos = (rx_read_pos + 1) % RX_BUF_SIZE;
+-	}
+-}
+-
+-bool send_packet(uint8_t packet_id, const uint8_t* payload, uint8_t length) {
+-	if (uart_handle == nullptr) return false;
+-	if (length > MAX_PAYLOAD_SIZE) return false;
+-
+-	uint32_t start_wait = HAL_GetTick();
+-	while (tx_busy) {
+-		if (HAL_GetTick() - start_wait > 10) return false;
+-	}
+-
+-	tx_buf[0] = SYNC_HI;
+-	tx_buf[1] = SYNC_LO;
+-	tx_buf[2] = packet_id;
+-	tx_buf[3] = length;
+-	std::memcpy(&tx_buf[4], payload, length);
+-
+-	uint16_t crc = crc16_ccitt(tx_buf, 4 + length);
+-	tx_buf[4 + length] = static_cast<uint8_t>(crc & 0xFF);
+-	tx_buf[5 + length] = static_cast<uint8_t>(crc >> 8);
+-
+-	tx_busy = true;
+-	HAL_UART_Transmit_DMA(uart_handle, tx_buf, 6 + length);
+-	return true;
+-}
+-
+-bool send_gps(const GpsPayload& p) {
+-	return send_packet(PACKET_GPS, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
+-}
+-
+-bool send_encoder(const EncoderPayload& p) {
+-	return send_packet(PACKET_ENCODER, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
+-}
+-
+-bool send_imu(const ImuPayload& p) {
+-	return send_packet(PACKET_IMU, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
+-}
+-
+-bool send_state_sync(const StateSyncPayload& p) {
+-	return send_packet(PACKET_STATE_SYNC, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
+-}
+-
+-bool send_dso_target(const DsoTargetPayload& p) {
+-	return send_packet(PACKET_DSO_TARGET, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
+-}
+-
+-bool send_debug(const DebugPayload& p) {
+-	return send_packet(PACKET_DEBUG, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
+-}
+-
+-void tx_complete_callback() {
+-	tx_busy = false;
+-}
+-
+-void rx_event_callback(uint16_t size) {
+-	// DMA circular mode handles continuous reception.
+-	// Re-enable if HAL stopped it (shouldn't happen in circular mode, but defensive).
+-	if (uart_handle->RxState == HAL_UART_STATE_READY) {
+-		HAL_UARTEx_ReceiveToIdle_DMA(uart_handle, rx_dma_buf, RX_BUF_SIZE);
+-		__HAL_DMA_DISABLE_IT(uart_handle->hdmarx, DMA_IT_HT);
+-	}
+-}
+-
+-} // namespace raspi
++namespace telescope {
++
++    void RasPi::process_byte(uint8_t byte) {
++        switch (decoder_.state) {
++        case RxState::HUNT_SYNC_HI:
++            if (byte == SYNC_HI) {
++                decoder_.state = RxState::HUNT_SYNC_LO;
++            }
++            break;
++
++        case RxState::HUNT_SYNC_LO:
++            if (byte == SYNC_LO) {
++                decoder_.header_pos = 0;
++                decoder_.state = RxState::READ_HEADER;
++            } else if (byte == SYNC_HI) {
++                // stay in HUNT_SYNC_LO
++            } else {
++                decoder_.sync_losses++;
++                decoder_.state = RxState::HUNT_SYNC_HI;
++            }
++            break;
++
++        case RxState::READ_HEADER:
++            decoder_.header_buf[decoder_.header_pos++] = byte;
++            if (decoder_.header_pos == 2) {
++                decoder_.packet_id = decoder_.header_buf[0];
++                decoder_.expected_len = decoder_.header_buf[1];
++                if (decoder_.expected_len > MAX_PAYLOAD_SIZE) {
++                    decoder_.sync_losses++;
++                    decoder_.state = RxState::HUNT_SYNC_HI;
++                } else if (decoder_.expected_len == 0) {
++                    decoder_.crc_pos = 0;
++                    decoder_.state = RxState::READ_CRC;
++                } else {
++                    decoder_.payload_pos = 0;
++                    decoder_.state = RxState::READ_PAYLOAD;
++                }
++            }
++            break;
++
++        case RxState::READ_PAYLOAD:
++            decoder_.payload_buf[decoder_.payload_pos++] = byte;
++            if (decoder_.payload_pos == decoder_.expected_len) {
++                decoder_.crc_pos = 0;
++                decoder_.state = RxState::READ_CRC;
++            }
++            break;
++
++        case RxState::READ_CRC:
++            decoder_.crc_buf[decoder_.crc_pos++] = byte;
++            if (decoder_.crc_pos == 2) {
++                // Reconstruct frame for CRC verification
++                uint8_t frame[4 + MAX_PAYLOAD_SIZE];
++                frame[0] = SYNC_HI;
++                frame[1] = SYNC_LO;
++                frame[2] = decoder_.packet_id;
++                frame[3] = decoder_.expected_len;
++                std::memcpy(&frame[4], decoder_.payload_buf, decoder_.expected_len);
++
++                uint16_t computed = crc16_ccitt(frame, 4 + decoder_.expected_len);
++                uint16_t received = static_cast<uint16_t>(decoder_.crc_buf[0])
++                                | (static_cast<uint16_t>(decoder_.crc_buf[1]) << 8);
++
++                if (computed == received) {
++                    dispatch_packet(decoder_.packet_id, decoder_.payload_buf, decoder_.expected_len);
++                } else {
++                    decoder_.crc_errors++;
++                }
++                decoder_.state = RxState::HUNT_SYNC_HI;
++            }
++            break;
++        }
++    }
++
++    void RasPi::dispatch_packet(uint8_t packet_id, const uint8_t* payload, uint8_t length) {
++        switch (packet_id) {
++        case PACKET_STATE_SYNC:
++            if (length >= sizeof(StateSyncPayload)) {
++                StateSyncPayload sync;
++                std::memcpy(&sync, payload, sizeof(sync));
++                current_state_ = sync.state;
++                last_state_sync_tick_ = HAL_GetTick();
++            }
++            break;
++
++        case PACKET_DSO_TARGET:
++            // SD card read and response will be wired in when SD driver is implemented
++            break;
++
++        case PACKET_DEBUG:
++            break;
++
++        default:
++            break;
++        }
++    }
++
++    void RasPi::init() {
++        last_state_sync_tick_ = HAL_GetTick();
++        
++        HAL_UARTEx_ReceiveToIdle_DMA(uart_, rx_dma_buf_, RX_BUF_SIZE);
++        // Disable half-transfer interrupt, we only care about idle line and transfer complete
++        __HAL_DMA_DISABLE_IT(uart_->hdmarx, DMA_IT_HT);
++    }
++
++    void RasPi::process() {
++        if (uart_ == nullptr) return;
++
++        uint16_t write_pos = RX_BUF_SIZE - __HAL_DMA_GET_COUNTER(uart_->hdmarx);
++
++        while (rx_read_pos_ != write_pos) {
++            process_byte(rx_dma_buf_[rx_read_pos_]);
++            rx_read_pos_ = (rx_read_pos_ + 1) % RX_BUF_SIZE;
++        }
++    }
++
++    bool RasPi::send_packet(uint8_t packet_id, const uint8_t* payload, uint8_t length) {
++        if (tx_busy_ || uart_ == nullptr) return false;
++        if (length > MAX_PAYLOAD_SIZE) return false;
++
++        tx_buf_[0] = SYNC_HI;
++        tx_buf_[1] = SYNC_LO;
++        tx_buf_[2] = packet_id;
++        tx_buf_[3] = length;
++        std::memcpy(&tx_buf_[4], payload, length);
++
++        uint16_t crc = crc16_ccitt(tx_buf_, 4 + length);
++        tx_buf_[4 + length] = static_cast<uint8_t>(crc & 0xFF);
++        tx_buf_[5 + length] = static_cast<uint8_t>(crc >> 8);
++
++        tx_busy_ = true;
++        HAL_UART_Transmit_DMA(uart_, tx_buf_, 6 + length);
++        return true;
++    }
++
++    bool RasPi::send_gps(const GPSPayload& p) {
++        return send_packet(PACKET_GPS, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
++    }
++
++    bool RasPi::send_encoder(const EncoderPayload& p) {
++        return send_packet(PACKET_ENCODER, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
++    }
++
++    bool RasPi::send_imu(const IMUPayload& p) {
++        return send_packet(PACKET_IMU, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
++    }
++
++    bool RasPi::send_state_sync(const StateSyncPayload& p) {
++        return send_packet(PACKET_STATE_SYNC, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
++    }
++
++    bool RasPi::send_debug(const DebugPayload& p) {
++        return send_packet(PACKET_DEBUG, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
++    }
++
++    uint8_t RasPi::mirrored_state() {
++        return current_state_;
++    }
++
++    bool RasPi::connection_active() {
++        return (HAL_GetTick() - last_state_sync_tick_) < CONNECTION_TIMEOUT_MS;
++    }
++
++    void RasPi::tx_complete_callback() {
++        tx_busy_ = false;
++    }
++
++    void RasPi::rx_event_callback(uint16_t size) {
++        // DMA circular mode handles continuous reception.
++        // Re-enable if HAL stopped it (shouldn't happen in circular mode, but defensive).
++        if (uart_->RxState == HAL_UART_STATE_READY) {
++            HAL_UARTEx_ReceiveToIdle_DMA(uart_, rx_dma_buf_, RX_BUF_SIZE);
++            __HAL_DMA_DISABLE_IT(uart_->hdmarx, DMA_IT_HT);
++        }
++    }
++
++} // namespace telescope
+diff --git a/stm32f4/Core/Src/controller.cpp b/stm32f4/Core/Src/controller.cpp
+index 3641525..6215399 100644
+--- a/stm32f4/Core/Src/controller.cpp
++++ b/stm32f4/Core/Src/controller.cpp
+@@ -31,13 +31,9 @@ extern "C" SPI_HandleTypeDef hspi1;
+ 
+ namespace telescope {
+ 
+-    /*
+-        I2C
+-    */
+-
+-    /*
+-        SPI
+-    */
++    /***********************
++    PORTS & PINS
++    ************************/
+     #define ENCODER_YAW_CS_PORT   GPIOC
+     #define ENCODER_YAW_CS_PIN    GPIO_PIN_2  // D12 (PC2)
+     #define ENCODER_PITCH_CS_PORT GPIOC
+@@ -52,6 +48,17 @@ namespace telescope {
+     #define LCD_LED_PORT  GPIOB
+     #define LCD_LED_PIN   GPIO_PIN_15  // MOSI
+ 
++    #define TOUCH_CS_PORT  GPIOC
++    #define TOUCH_CS_PIN   GPIO_PIN_3   // D11
++    #define TOUCH_IRQ_PORT GPIOB
++    #define TOUCH_IRQ_PIN  GPIO_PIN_14  // MISO
++
++    #define DEBUG_BUTTON_PORT GPIOC
++    #define DEBUG_BUTTON_PIN  GPIO_PIN_4
++
++    /***********************
++    OFFSETS & FILTERS
++    ************************/
+     constexpr uint16_t ENCODER_FULL = 16384;
+     constexpr uint16_t deg_to_raw(float deg) {
+         return static_cast<uint16_t>((deg / 360.0f) * ENCODER_FULL) % ENCODER_FULL;
+@@ -61,16 +68,6 @@ namespace telescope {
+     constexpr uint16_t YAW_OFFSET   = deg_to_raw(27.0f);
+     constexpr uint16_t PITCH_OFFSET = deg_to_raw(116.6f);
+ 
+-    encoder::Encoder* yaw_encoder = nullptr;
+-    encoder::Encoder* pitch_encoder = nullptr;
+-
+-    telescope::Touchscreen touchscreen(&hspi1,
+-        LCD_CS_PORT,  LCD_CS_PIN,
+-        LCD_RST_PORT, LCD_RST_PIN,
+-        LCD_LED_PORT, LCD_LED_PIN,
+-        LCD_DC_PORT,  LCD_DC_PIN);  // cs, rst, led, dc
+-    Touch xpt;
+-
+     // BNO055 heading: int16_t units of 1/16 deg, full circle = 360 * 16 = 5760
+     // AS5048A raw: uint16_t 14-bit, full circle = 16384
+     constexpr std::size_t FILTER_WINDOW = 8;
+@@ -78,12 +75,28 @@ namespace telescope {
+     filter::Filter<uint16_t, FILTER_WINDOW> yaw_filter{16384};
+     filter::Filter<uint16_t, FILTER_WINDOW> pitch_filter{16384};
+ 
+-    /*
+-      Initialization sequence
+-    */
+-    GPS::gps gps_sensor;
+-    SDCard::SDCard sd_card;
++    /***********************
++    HARDWARE INITIALIZATION
++    ************************/
++    Encoder yaw_encoder(&hspi1, ENCODER_YAW_CS_PORT, ENCODER_YAW_CS_PIN, YAW_OFFSET);
++    Encoder pitch_encoder(&hspi1, ENCODER_PITCH_CS_PORT, ENCODER_PITCH_CS_PIN, PITCH_OFFSET);
+ 
++    GPS gps(&huart6);
++    IMU imu(&hi2c1);
++    RasPi raspi(&huart1);
++    SDCard sd_card{};
++
++    Touchscreen touchscreen(&hspi1,
++        LCD_CS_PORT,  LCD_CS_PIN,
++        LCD_RST_PORT, LCD_RST_PIN,
++        LCD_LED_PORT, LCD_LED_PIN,
++        LCD_DC_PORT,  LCD_DC_PIN);  // cs, rst, led, dc
++    Touch xpt(&hspi1, TOUCH_CS_PORT, TOUCH_CS_PIN, TOUCH_IRQ_PORT, TOUCH_IRQ_PIN);
++
++
++    /***********************
++    TIMING
++    ************************/
+     constexpr uint32_t IMU_INTERVAL_MS = 100; // 10 Hz
+     constexpr uint32_t GPS_INTERVAL_MS = 1000; // 1 Hz
+     constexpr uint32_t ENCODER_INTERVAL_MS = 100; // 10 Hz
+@@ -98,64 +111,60 @@ namespace telescope {
+     uint32_t last_touch_tick = 0;
+     uint32_t last_sm_tick = 0;
+ 
+-    StateMachine* state_machine = nullptr;
++    /***********************
++    STATE MACHINE
++    ************************/
++    StateMachine state_machine(touchscreen, sd_card, raspi);
+ 
+     auto init() -> void {
+         const char* msg = "telescope init\r\n";
+         HAL_UART_Transmit(&huart3, reinterpret_cast<const uint8_t*>(msg), 16, 100);
+ 
+-        raspi::init(&huart1);
+-        imu::init(&hi2c1);
+-        gps_sensor.init(&huart6);
++        raspi.init();
+ 
+-        static encoder::Encoder yaw_enc(&hspi1, ENCODER_YAW_CS_PORT, ENCODER_YAW_CS_PIN, YAW_OFFSET);
+-        yaw_encoder = &yaw_enc;
+-        yaw_encoder->clear_error();
++        imu.init();
++        gps.init();
+ 
+-        static encoder::Encoder pitch_enc(&hspi1, ENCODER_PITCH_CS_PORT, ENCODER_PITCH_CS_PIN, PITCH_OFFSET);
+-        pitch_encoder = &pitch_enc;
+-        pitch_encoder->clear_error();
++        yaw_encoder.clear_error();
++        pitch_encoder.clear_error();
+ 
+-        xpt.init();
+         touchscreen.init();
+         touchscreen.draw_main();
+ 
+-        int sd_result = sd_card.mount();
+-        char sd_msg[48];
+-        int sd_len = snprintf(sd_msg, sizeof(sd_msg), "SD mount: %s\r\n", sd_result == 0 ? "OK" : "FAIL");
+-        HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(sd_msg), static_cast<uint16_t>(sd_len), 100);
++        xpt.init(); 
++        //TODO: ADD ANYTHING ELSE TO INITIALIZE THE TOUCH SCREEN HERE
++
++        sd_card.mount();
++        sd_card.open_catalogue("catalogue.bin");
+ 
+-        static StateMachine sm(touchscreen, sd_card);
+-        sm.init();
+-        state_machine = &sm;
++        state_machine.init();
+     }
+ 
++    //TODO: MOVE THIS ELSEWHERE
+     bool prev_button_pressed = false;
+ 
+-    #define DEBUG_BUTTON_PORT GPIOC
+-    #define DEBUG_BUTTON_PIN  GPIO_PIN_4
+-
+     [[noreturn]] auto loop() -> void {
+         for (;;) {
+-            raspi::process();
+-            gps_sensor.process();
++            // Send periodic sensor updates to the raspi
++            raspi.process();
++            gps.process();
+ 
+             uint32_t now = HAL_GetTick();
+ 
+             if (now - last_imu_tick >= IMU_INTERVAL_MS) {
+                 last_imu_tick = now;
+-                if (imu::update()) {
+-                    ImuPayload payload{};
+-                    payload.heading = imu_filter.update(imu::heading());
+-                    payload.calibration = imu::calibration();
+-                    raspi::send_imu(payload);
++                if (imu.update()) {
++                    IMUPayload payload{};
++                    payload.heading = imu_filter.update(imu.get_heading());
++                    payload.calibration = imu.get_calibration();
++                    raspi.send_imu(payload);
+                 }
+             }
+ 
+             if (now - last_gps_tick >= GPS_INTERVAL_MS) {
+                 last_gps_tick = now;
+-                if (gps_sensor.has_fix()) {
+-                    raspi::send_gps(gps_sensor.payload());
++                if (gps.has_fix()) {
++                    raspi.send_gps(gps.payload());
+                 }
+             }
+ 
+@@ -163,63 +172,79 @@ namespace telescope {
+                 last_encoder_tick = now;
+                 EncoderPayload payload{};
+                 uint16_t raw = 0;
+-                bool yaw_ok = (yaw_encoder->read_raw_angle(raw, true) == HAL_OK);
++                bool yaw_ok = (yaw_encoder.read_raw_angle(raw, true) == HAL_OK);
+                 if (yaw_ok) payload.yaw_raw = yaw_filter.update(raw);
+-                bool pitch_ok = (pitch_encoder->read_raw_angle(raw) == HAL_OK);
++                bool pitch_ok = (pitch_encoder.read_raw_angle(raw) == HAL_OK);
+                 if (pitch_ok) payload.pitch_raw = pitch_filter.update(raw);
+-                if (yaw_ok || pitch_ok) raspi::send_encoder(payload);
++                if (yaw_ok || pitch_ok) raspi.send_encoder(payload);
+             }
+ 
+             if (now - last_serial_tick >= SERIAL_INTERVAL_MS) {
+                 last_serial_tick = now;
+-                bool imu_ok = imu::update();
+-                uint8_t cal = imu::calibration();
++                bool imu_ok = imu.update();
++                uint8_t cal = imu.get_calibration();
+                 float yaw_deg = 0.0f;
+                 float pitch_deg = 0.0f;
+-                yaw_encoder->read_angle_deg(yaw_deg, true);
+-                pitch_encoder->read_angle_deg(pitch_deg);
++                yaw_encoder.read_angle_deg(yaw_deg, true);
++                pitch_encoder.read_angle_deg(pitch_deg);
+                 char buf[120];
+                 int len = snprintf(buf, sizeof(buf),
+                                    "IMU: %s  HDG: %.1f  CAL: S%d G%d A%d M%d  GPS: %s  SAT: %d  YAW: %.1f  PIT: %.1f\r\n",
+                                    imu_ok ? "OK" : "FAIL",
+-                                   static_cast<float>(imu::heading()) / 16.0f,
++                                   static_cast<float>(imu.get_heading()) / 16.0f,
+                                    (cal >> 6) & 3, (cal >> 4) & 3,
+                                    (cal >> 2) & 3, cal & 3,
+-                                   gps_sensor.has_fix() ? "FIX" : "---",
+-                                   gps_sensor.num_satellites,
++                                   gps.has_fix() ? "FIX" : "---",
++                                   gps.num_satellites,
+                                    static_cast<double>(yaw_deg),
+                                    static_cast<double>(pitch_deg));
+                 HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(buf),
+                                   static_cast<uint16_t>(len), 100);
+             }
+ 
+-            if(xpt.touch_pressed() && (now - last_touch_tick >= TOUCH_DEBOUNCE_MS)){
++            // Touchscreen input processing 
++            if(xpt.is_pressed() && (now - last_touch_tick >= TOUCH_DEBOUNCE_MS)){
+                 last_touch_tick = now;
+-                if(xpt.touch_process()){
+-                    char action = touchscreen.update_display_string(xpt.button);
+-                    touchscreen.normal_process(action, xpt.button);
++                if(xpt.process()){
++                    char btn = xpt.get_button();
++                    char action = touchscreen.update_display_string(btn);
++                    if(touchscreen.get_search_status()){
++                        if(action == 'C'){
++                            touchscreen.gocancel();
++                        }
++                    }
++                    else{
++                        if(action == 'V'){
++                            touchscreen.view_change();
++                        }
++                        else{
++                            touchscreen.normal_process(action, btn);
++                        }
++                    }
+                 }
+             }
+ 
++            // State machine tick
++            //TODO: I DONT THINK THIS STATE_MACHINE_INTERVAL IS NECESSARY
+             if (now - last_sm_tick >= STATE_MACHINE_INTERVAL_MS) {
+                 last_sm_tick = now;
+                 float yaw_deg_sm = 0.0f;
+                 float pitch_deg_sm = 0.0f;
+-                yaw_encoder->read_angle_deg(yaw_deg_sm, true);
+-                pitch_encoder->read_angle_deg(pitch_deg_sm);
++                yaw_encoder.read_angle_deg(yaw_deg_sm, true);
++                pitch_encoder.read_angle_deg(pitch_deg_sm);
+ 
+-                float lat = static_cast<float>(gps_sensor.latitude);
+-                float lon = static_cast<float>(gps_sensor.longitude);
++                float lat = static_cast<float>(gps.latitude);
++                float lon = static_cast<float>(gps.longitude);
+                 UTC time{};
+-                time.year = gps_sensor.year;
+-                time.month = gps_sensor.month;
+-                time.day = gps_sensor.day;
+-                time.hour = gps_sensor.utc_hours;
+-                time.minute = gps_sensor.utc_minutes;
+-                time.second = static_cast<int>(gps_sensor.utc_seconds);
+-
+-                state_machine->update_sensors(pitch_deg_sm, yaw_deg_sm, lat, lon, time);
+-                state_machine->tick();
++                time.year = gps.year;
++                time.month = gps.month;
++                time.day = gps.day;
++                time.hour = gps.utc_hours;
++                time.minute = gps.utc_minutes;
++                time.second = static_cast<int>(gps.utc_seconds);
++
++                state_machine.update_sensors(pitch_deg_sm, yaw_deg_sm, lat, lon, time);
++                state_machine.tick();
+             }
+ 
+             // Button press sends debug packet
+@@ -228,7 +253,7 @@ namespace telescope {
+                 DebugPayload dbg{};
+                 const char* msg = "PING";
+                 __builtin_memcpy(dbg.data, msg, 4);
+-                raspi::send_debug(dbg);
++                raspi.send_debug(dbg);
+             }
+             prev_button_pressed = button_pressed;
+         }
+@@ -248,16 +273,16 @@ void Loop() {
+ 
+ void HAL_UART_TxCpltCallback(UART_HandleTypeDef* huart) {
+     if (huart->Instance == USART1) {
+-        raspi::tx_complete_callback();
++        telescope::raspi.tx_complete_callback();
+     }
+ }
+ 
+ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef* huart, uint16_t Size) {
+     if (huart->Instance == USART1) {
+-        raspi::rx_event_callback(Size);
++        telescope::raspi.rx_event_callback(Size);
+     }
+     if (huart->Instance == USART6) {
+-        telescope::gps_sensor.rx_event_callback(Size);
++        telescope::gps.rx_event_callback(Size);
+     }
+ }
+ 
+diff --git a/stm32f4/Core/Src/stm32f4xx_hal_msp.c b/stm32f4/Core/Src/stm32f4xx_hal_msp.c
+index e803437..6e3687f 100644
+--- a/stm32f4/Core/Src/stm32f4xx_hal_msp.c
++++ b/stm32f4/Core/Src/stm32f4xx_hal_msp.c
+@@ -397,7 +397,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* huart)
+     hdma_usart1_rx.Init.MemInc = DMA_MINC_ENABLE;
+     hdma_usart1_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+     hdma_usart1_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+-    hdma_usart1_rx.Init.Mode = DMA_NORMAL;
++    hdma_usart1_rx.Init.Mode = DMA_CIRCULAR;
+     hdma_usart1_rx.Init.Priority = DMA_PRIORITY_LOW;
+     hdma_usart1_rx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+     if (HAL_DMA_Init(&hdma_usart1_rx) != HAL_OK)

@@ -60,7 +60,6 @@ namespace telescope{
 
     bool Touch::read_raw(uint16_t* x, uint16_t* y){
         if(x == nullptr || y == nullptr) return false;
-        if(!is_pressed()) return false;
 
         read_12_bit(touch_reg::READ_X);
         read_12_bit(touch_reg::READ_Y);
@@ -71,7 +70,6 @@ namespace telescope{
 
     bool Touch::read_average_raw(uint16_t* x, uint16_t* y){
         if(x == nullptr || y == nullptr) return false;
-        if(!is_pressed()) return false;
 
         const int samples = 5;
         uint32_t sum_x = 0, sum_y = 0;
