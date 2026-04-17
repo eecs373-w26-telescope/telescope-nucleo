@@ -461,6 +461,10 @@ namespace telescope{
         }
         else{
             if(c != ' '){
+                if(length_ >= 3){
+                    error();
+                    return 'U';
+                }
                 display_[length_++] = c;
                 display_[length_] = '\0';
                 return 'N';
@@ -567,9 +571,9 @@ namespace telescope{
     }
 
     void Touchscreen::normal_process(char action, char button){
-        if(length_ >= 4){
-            error();
-        }
+        // if(length_ >= 4){
+        //     error();
+        // }
         if(action == 'N'){
             display_new_character(button);
         }
