@@ -3,38 +3,47 @@
 #include "main.h"
 #include <stdint.h>
 
-extern "C" SPI_HandleTypeDef hspi1;
-#define TOUCH_SPI_HANDLE hspi1
+namespace telescope{
+    struct touch_reg{
+        static constexpr uint8_t READ_X = 0xD0;
+        static constexpr uint8_t READ_Y = 0x90;
+    };
 
-#define TOUCH_CS_GPIO_Port   GPIOC
-#define TOUCH_CS_Pin         GPIO_PIN_3   // D11
+    struct touch_calibration{
+        static constexpr uint16_t raw_x_min = 270;
+        static constexpr uint16_t raw_x_max = 3800;
+        static constexpr uint16_t raw_y_min = 300;
+        static constexpr uint16_t raw_y_max = 3900;
+    };
 
-#define TOUCH_IRQ_GPIO_Port  GPIOB
-#define TOUCH_IRQ_Pin        GPIO_PIN_14  // MISO
-
-#define LCD_W 480
-#define LCD_H 320
-
-#define RAW_X_MIN 270
-#define RAW_X_MAX 3800
-#define RAW_Y_MIN 300
-#define RAW_Y_MAX 3900
-
-namespace telescope {
     class Touch{
         public:
-            uint16_t raw_x, raw_y, real_x, real_y;
-            uint8_t pressed;
-            char button;
+            Touch(SPI_HandleTypeDef* hspi, GPIO_TypeDef* cs_port, uint16_t cs_pin,
+                  GPIO_TypeDef* irq_port, uint16_t irq_pin);
             void init();
-            bool touch_pressed();
-            uint16_t touch_read_12bit(uint8_t cmd);
-            bool touch_read_raw(uint16_t* x, uint16_t* y);
-            bool touch_read_average_raw(uint16_t* x, uint16_t* y);
-            bool touch_convert(uint16_t raw_x, uint16_t raw_y, uint16_t* x, uint16_t* y);
-            char keypad_conversion(uint16_t px, uint16_t py);
-            bool touch_process();
-            void touch_calibration();
+            bool is_pressed();
+            bool process();
+            char get_button();
+            void calibration();
+
         private:
+            SPI_HandleTypeDef* hspi_ = nullptr;
+            GPIO_TypeDef* cs_port_ = nullptr;
+            uint16_t cs_pin_;
+            GPIO_TypeDef* irq_port_ = nullptr;
+            uint16_t irq_pin_;
+
+            touch_calibration calib_{};
+
+            char button_ = '\0';
+
+            void cs_low();
+            void cs_high();
+
+            uint16_t read_12_bit(uint8_t cmd);
+            bool read_raw(uint16_t* x, uint16_t* y);
+            bool read_average_raw(uint16_t* x, uint16_t* y);
+            bool convert_px(uint16_t raw_x, uint16_t raw_y, uint16_t* x, uint16_t* y);
+            char keypad_conversion(uint16_t px, uint16_t py);
     };
 }

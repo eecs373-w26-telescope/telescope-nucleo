@@ -562,6 +562,10 @@ namespace telescope{
         return std::atoi(display_);
     }
 
+    const char* Touchscreen::get_display(){
+        return display_;
+    }
+
     void Touchscreen::normal_process(char action, char button){
         if(length_ >= 4){
             error();

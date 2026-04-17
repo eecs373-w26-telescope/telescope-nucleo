@@ -48,6 +48,11 @@ namespace telescope {
     #define LCD_LED_PORT  GPIOB
     #define LCD_LED_PIN   GPIO_PIN_15  // MOSI
 
+    #define TOUCH_CS_PORT  GPIOC
+    #define TOUCH_CS_PIN   GPIO_PIN_3   // D11
+    #define TOUCH_IRQ_PORT GPIOB
+    #define TOUCH_IRQ_PIN  GPIO_PIN_14  // MISO
+
     #define DEBUG_BUTTON_PORT GPIOC
     #define DEBUG_BUTTON_PIN  GPIO_PIN_4
 
@@ -86,7 +91,7 @@ namespace telescope {
         LCD_RST_PORT, LCD_RST_PIN,
         LCD_LED_PORT, LCD_LED_PIN,
         LCD_DC_PORT,  LCD_DC_PIN);  // cs, rst, led, dc
-    Touch xpt;
+    Touch xpt(&hspi1, TOUCH_CS_PORT, TOUCH_CS_PIN, TOUCH_IRQ_PORT, TOUCH_IRQ_PIN);
 
 
     /***********************
@@ -198,11 +203,24 @@ namespace telescope {
             }
 
             // Touchscreen input processing 
-            if(xpt.touch_pressed() && (now - last_touch_tick >= TOUCH_DEBOUNCE_MS)){
+            if(xpt.is_pressed() && (now - last_touch_tick >= TOUCH_DEBOUNCE_MS)){
                 last_touch_tick = now;
-                if(xpt.touch_process()){
-                    char action = touchscreen.update_display_string(xpt.button);
-                    touchscreen.normal_process(action, xpt.button);
+                if(xpt.process()){
+                    char btn = xpt.get_button();
+                    char action = touchscreen.update_display_string(btn);
+                    if(touchscreen.get_search_status()){
+                        if(action == 'C'){
+                            touchscreen.gocancel();
+                        }
+                    }
+                    else{
+                        if(action == 'V'){
+                            touchscreen.view_change();
+                        }
+                        else{
+                            touchscreen.normal_process(action, btn);
+                        }
+                    }
                 }
             }
 

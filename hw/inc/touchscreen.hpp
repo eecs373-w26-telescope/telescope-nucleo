@@ -38,6 +38,7 @@ namespace telescope {
             bool get_main(); // returns whether touchscreen is on the main screen
             bool get_view_status(); // returns whether general DSO identification is on/off
             int get_selected_messier_id();
+            const char* get_display();
 
         private:
             SPI_HandleTypeDef* hspi_ = nullptr;
