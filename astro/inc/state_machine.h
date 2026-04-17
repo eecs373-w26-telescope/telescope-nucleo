@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+#include <cstring>
 #include <string>
 
 #include <hw/inc/sd_card.hpp>
@@ -36,6 +38,7 @@ public:
         has_selected_object_ = false;
         selected_object_ = DSO{};
         state_sequence_ = 0;
+        target_full_sent_ = false;
     }
 
     void update_sensors(float altitude_deg, float azimuth_deg,
@@ -65,6 +68,7 @@ public:
     TelescopeState current_state() const { return current_state_; }
     int selected_messier_id() const { return selected_messier_id_; }
     bool has_selected_object() const { return has_selected_object_; }
+    const DSO& selected_object() const { return selected_object_; }
     int fov_object_count() const { return static_cast<int>(astronomy_.get_current_fov().objects.size()); }
     EquatorialCoordinates current_eqc() const { return astronomy_.get_equatorial_coordinates(); }
     const FOV& current_fov() const { return astronomy_.get_current_fov(); }
@@ -110,6 +114,24 @@ private:
         return false;
     }
 
+    void send_dso_target_packet() {
+        DSOTargetPayload pkt{};
+        pkt.status         = DSO_OK;
+        pkt.catalog_number = static_cast<uint16_t>(selected_messier_id_);
+        if (has_selected_object_) {
+            pkt.ra_mas       = static_cast<int32_t>(selected_object_.pos.right_ascension * 54000000.0f);
+            pkt.dec_mas      = static_cast<int32_t>(selected_object_.pos.declination * 3600000.0f);
+            pkt.magnitude_e2 = static_cast<int16_t>(selected_object_.brightness * 100.0f);
+            const size_t n = std::min(selected_object_.name.size(), sizeof(pkt.name) - 1);
+            std::memcpy(pkt.name, selected_object_.name.c_str(), n);
+        } else {
+            const std::string nm = "M" + std::to_string(selected_messier_id_);
+            const size_t n = std::min(nm.size(), sizeof(pkt.name) - 1);
+            std::memcpy(pkt.name, nm.c_str(), n);
+        }
+        raspi_.send_dso_target(pkt);
+    }
+
     void transition(TelescopeState next) {
         current_state_ = next;
         StateSyncPayload payload{};
@@ -131,6 +153,8 @@ private:
             search_requested_ = false;
             cancel_requested_ = false;
             try_select_target_from_current_fov(selected_messier_id_);
+            send_dso_target_packet();
+            target_full_sent_ = has_selected_object_;
             transition(TelescopeState::SEARCH);
         }
     }
@@ -149,7 +173,11 @@ private:
         }
 
         if (!has_selected_object_ && selected_messier_id_ >= 0) {
-            try_select_target_from_current_fov(selected_messier_id_);
+            bool found = try_select_target_from_current_fov(selected_messier_id_);
+            if (found && !target_full_sent_) {
+                send_dso_target_packet();
+                target_full_sent_ = true;
+            }
         }
 
         bool in_fov = has_selected_object_ &&
@@ -198,6 +226,7 @@ private:
     uint16_t state_sequence_{0};
     int last_search_result_{0};
     bool has_selected_object_{false};
+    bool target_full_sent_{false};
     DSO selected_object_{};
 };
 

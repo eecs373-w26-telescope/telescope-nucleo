@@ -406,6 +406,29 @@ namespace telescope {
                     raspi.send_fov_objects(pkt, pkt.count);
                 }
 
+                {
+                    SearchGuidancePayload sg{};
+                    if (state_machine.has_selected_object()) {
+                        sg.has_target = 1;
+                        float raw_x = 0.0f, raw_y = 0.0f;
+                        const FOV& fov = state_machine.current_fov();
+                        Astronomy::project_gnomonic(
+                            fov.center_pos,
+                            state_machine.selected_object().pos,
+                            fov.radius, raw_x, raw_y);
+                        float mag = sqrtf(raw_x * raw_x + raw_y * raw_y);
+                        if (mag > 1e-6f) {
+                            sg.dx_e4 = static_cast<int16_t>((raw_x / mag) * 10000.0f);
+                            sg.dy_e4 = static_cast<int16_t>((raw_y / mag) * 10000.0f);
+                        }
+                        float fov_r_rad = fov.radius * 3.14159265f / 180.0f;
+                        float dist_deg  = atanf(mag * tanf(fov_r_rad)) * 180.0f / 3.14159265f;
+                        sg.distance_e2  = static_cast<int16_t>(
+                            std::min(dist_deg * 100.0f, 32767.0f));
+                    }
+                    raspi.send_search_guidance(sg);
+                }
+
                 EquatorialCoordinates eqc = state_machine.current_eqc();
                 HorizontalCoordinates hc = state_machine.current_hc();
                 const FOV& fov = state_machine.current_fov();

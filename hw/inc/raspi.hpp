@@ -32,6 +32,7 @@ namespace telescope {
         bool send_debug(const DebugPayload& payload);
         bool send_fov_objects(const FovObjectsPayload& payload, uint8_t count);
         bool send_time_mode(const TimeModePayload& payload);
+        bool send_search_guidance(const SearchGuidancePayload& payload);
 
         // Current mirrored state from raspi (updated by STATE_SYNC packets)
         uint8_t mirrored_state();

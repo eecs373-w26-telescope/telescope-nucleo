@@ -184,6 +184,10 @@ namespace telescope {
         return send_packet(PACKET_TIME_MODE, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
     }
 
+    bool RasPi::send_search_guidance(const SearchGuidancePayload& p) {
+        return send_packet(PACKET_SEARCH_GUIDANCE, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
+    }
+
     bool RasPi::send_fov_objects(const FovObjectsPayload& p, uint8_t count) {
         const uint8_t len = static_cast<uint8_t>(sizeof(uint8_t) + count * sizeof(FovObjectEntry));
         return send_packet(PACKET_FOV_OBJECTS, reinterpret_cast<const uint8_t*>(&p), len);
