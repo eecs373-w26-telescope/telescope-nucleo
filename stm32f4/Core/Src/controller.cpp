@@ -378,6 +378,14 @@ namespace telescope {
                     time.second = build_time::second();
                 }
 
+                {
+                    TimeModePayload tm{};
+                    if (gps.has_fix())               tm.mode = TIME_MODE_SATELLITE;
+                    else if (raspi.has_raspi_time()) tm.mode = TIME_MODE_RASPI;
+                    else                             tm.mode = TIME_MODE_COMPILE;
+                    raspi.send_time_mode(tm);
+                }
+
                 state_machine.update_sensors(pitch_deg_sm, azimuth_deg, lat, lon, time);
                 state_machine.tick();
 
