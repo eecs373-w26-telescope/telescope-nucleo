@@ -126,7 +126,7 @@ namespace telescope {
     constexpr uint32_t IMU_INTERVAL_MS = 100; // 10 Hz
     constexpr uint32_t GPS_INTERVAL_MS = 1000; // 1 Hz
     constexpr uint32_t ENCODER_INTERVAL_MS = 100; // 10 Hz
-    constexpr uint32_t SERIAL_INTERVAL_MS = 1000; // 1 Hz
+    constexpr uint32_t SERIAL_INTERVAL_MS = 1000;
     constexpr uint32_t TOUCH_DEBOUNCE_MS  = 500;
     constexpr uint32_t STATE_MACHINE_INTERVAL_MS = 100; // 10 Hz
     float filtered_imu_heading_deg = 0.0f;
@@ -174,6 +174,23 @@ namespace telescope {
                                 build_time::year(), build_time::month(), build_time::day(),
                                 build_time::hour(), build_time::minute(), build_time::second());
         HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(time_buf), static_cast<uint16_t>(time_len), 100);
+
+        if (open_res == 0) {
+            std::vector<DSO> all_objects;
+            sd_card.search_objects_in_bounds(0.0f, 359.99f, -90.0f, 90.0f, all_objects);
+            char hdr[32];
+            int hdr_len = snprintf(hdr, sizeof(hdr), "DSO dump: %d objects\r\n", static_cast<int>(all_objects.size()));
+            HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(hdr), static_cast<uint16_t>(hdr_len), 100);
+            for (const auto& obj : all_objects) {
+                char obj_buf[64];
+                int obj_len = snprintf(obj_buf, sizeof(obj_buf), "  %s RA=%.2f DEC=%.2f mag=%.1f\r\n",
+                                       obj.name.c_str(),
+                                       static_cast<double>(obj.pos.right_ascension),
+                                       static_cast<double>(obj.pos.declination),
+                                       static_cast<double>(obj.brightness));
+                HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(obj_buf), static_cast<uint16_t>(obj_len), 100);
+            }
+        }
 
         state_machine.init();
     }
@@ -243,11 +260,12 @@ namespace telescope {
                 EquatorialCoordinates eqc = state_machine.current_eqc();
                 char sm_buf[120];
                 int sm_len = snprintf(sm_buf, sizeof(sm_buf),
-                                      "SM: state=%d target=M%d found=%d fov_objs=%d RA=%.2f DEC=%.2f%s\r\n",
+                                      "SM: state=%d target=M%d found=%d fov_objs=%d search_res=%d RA=%.2f DEC=%.2f%s\r\n",
                                       static_cast<int>(state_machine.current_state()),
                                       state_machine.selected_messier_id(),
                                       state_machine.has_selected_object() ? 1 : 0,
                                       state_machine.fov_object_count(),
+                                      state_machine.last_search_result(),
                                       static_cast<double>(eqc.right_ascension),
                                       static_cast<double>(eqc.declination),
                                       gps.has_fix() ? "" : " [FALLBACK]");

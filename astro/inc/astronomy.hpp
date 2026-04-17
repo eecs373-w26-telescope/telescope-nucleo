@@ -17,7 +17,7 @@ public:
                      const UTC& time);
     void convert_hc_to_eqc();
     void calculate_FOV();
-    void find_objects_within_FOV();
+    int find_objects_within_FOV();
 
     bool is_object_in_FOV(const DSO& object, const FOV& fov);
     float calculate_object_distance_from_FOV(const DSO& object, const FOV& fov);

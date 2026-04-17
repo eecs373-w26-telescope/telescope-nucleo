@@ -68,6 +68,7 @@ public:
     int fov_object_count() const { return static_cast<int>(astronomy_.get_current_fov().objects.size()); }
     EquatorialCoordinates current_eqc() const { return astronomy_.get_equatorial_coordinates(); }
     const FOV& current_fov() const { return astronomy_.get_current_fov(); }
+    int last_search_result() const { return last_search_result_; }
 
 private:
     void sample_search_events() {
@@ -88,7 +89,7 @@ private:
     void update_fov_and_objects() {
         astronomy_.convert_hc_to_eqc();
         astronomy_.calculate_FOV();
-        astronomy_.find_objects_within_FOV();
+        last_search_result_ = astronomy_.find_objects_within_FOV();
     }
 
     bool try_select_target_from_current_fov(int messier_id) {
@@ -193,6 +194,7 @@ private:
     int selected_messier_id_{-1};
 
     uint16_t state_sequence_{0};
+    int last_search_result_{0};
     bool has_selected_object_{false};
     DSO selected_object_{};
 };

@@ -156,7 +156,7 @@ void Astronomy::compute_equatorial_bounds(const FOV& fov, float& ra_min_deg, flo
 }
 
 
-void Astronomy::find_objects_within_FOV() {
+int Astronomy::find_objects_within_FOV() {
     // Pipeline:
     // (1) keep overlap from old FOV in RAM
     // (2) search SD only for the coarse new window
@@ -173,7 +173,7 @@ void Astronomy::find_objects_within_FOV() {
     compute_equatorial_bounds(current_FOV, ra_min_deg, ra_max_deg, dec_min_deg, dec_max_deg);
 
     std::vector<DSO> candidates;
-    db.search_objects_in_bounds(ra_min_deg, ra_max_deg, dec_min_deg, dec_max_deg, candidates);
+    int search_res = db.search_objects_in_bounds(ra_min_deg, ra_max_deg, dec_min_deg, dec_max_deg, candidates);
 
     for (const auto& obj : candidates) {
         if (!is_object_in_FOV(obj, current_FOV)) {
@@ -195,4 +195,5 @@ void Astronomy::find_objects_within_FOV() {
 
     current_FOV.objects = std::move(new_objects);
     old_FOV = current_FOV;
+    return search_res;
 }
