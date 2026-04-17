@@ -153,6 +153,10 @@ namespace telescope {
         return send_packet(PACKET_IMU, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
     }
 
+    bool RasPi::send_dso_target(const DSOTargetPayload& p) {
+        return send_packet(PACKET_DSO_TARGET, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
+    }
+
     bool RasPi::send_state_sync(const StateSyncPayload& p) {
         return send_packet(PACKET_STATE_SYNC, reinterpret_cast<const uint8_t*>(&p), sizeof(p));
     }

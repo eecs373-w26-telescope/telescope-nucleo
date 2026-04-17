@@ -26,6 +26,7 @@ namespace telescope {
         bool send_gps(const GPSPayload& payload);
         bool send_encoder(const EncoderPayload& payload);
         bool send_imu(const IMUPayload& payload);
+        bool send_dso_target(const DSOTargetPayload& payload);
         bool send_state_sync(const StateSyncPayload& payload);
         bool send_debug(const DebugPayload& payload);
 

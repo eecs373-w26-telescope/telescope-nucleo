@@ -21,6 +21,7 @@ State machine implementation
 #include "main.h"
 #include "stm32f4xx.h"
 #include "stm32f4xx_hal_uart.h"
+#include <cmath>
 #include <cstdio>
 
 // __DATE__ = "Mmm DD YYYY", __TIME__ = "HH:MM:SS"
@@ -128,6 +129,7 @@ namespace telescope {
     constexpr uint32_t SERIAL_INTERVAL_MS = 1000; // 1 Hz
     constexpr uint32_t TOUCH_DEBOUNCE_MS  = 500;
     constexpr uint32_t STATE_MACHINE_INTERVAL_MS = 100; // 10 Hz
+    float filtered_imu_heading_deg = 0.0f;
     uint32_t last_imu_tick = 0;
     uint32_t last_gps_tick = 0;
     uint32_t last_ping_tick = 0;
@@ -193,6 +195,7 @@ namespace telescope {
                     IMUPayload payload{};
                     payload.heading = imu_filter.update(imu.get_heading());
                     payload.calibration = imu.get_calibration();
+                    filtered_imu_heading_deg = static_cast<float>(payload.heading) / 16.0f;
                     raspi.send_imu(payload);
                 }
             }
@@ -251,6 +254,26 @@ namespace telescope {
                 HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(sm_buf),
                                   static_cast<uint16_t>(sm_len), 100);
 
+                const FOV& fov = state_machine.current_fov();
+                char fov_buf[80];
+                int fov_len = snprintf(fov_buf, sizeof(fov_buf),
+                                       "FOV: center=%.2fh/%.2fd r=%.2fd objects=%d\r\n",
+                                       static_cast<double>(fov.center_pos.right_ascension),
+                                       static_cast<double>(fov.center_pos.declination),
+                                       static_cast<double>(fov.radius),
+                                       static_cast<int>(fov.objects.size()));
+                HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(fov_buf), static_cast<uint16_t>(fov_len), 100);
+
+                for (const auto& obj : fov.objects) {
+                    char obj_buf[64];
+                    int obj_len = snprintf(obj_buf, sizeof(obj_buf), "  %s RA=%.2f DEC=%.2f mag=%.1f\r\n",
+                                          obj.name.c_str(),
+                                          static_cast<double>(obj.pos.right_ascension),
+                                          static_cast<double>(obj.pos.declination),
+                                          static_cast<double>(obj.brightness));
+                    HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(obj_buf), static_cast<uint16_t>(obj_len), 100);
+                }
+
                 StateSyncPayload sync{};
                 sync.state    = static_cast<uint8_t>(state_machine.current_state());
                 sync.flags    = 0;
@@ -288,6 +311,7 @@ namespace telescope {
                 float pitch_deg_sm = 0.0f;
                 yaw_encoder.read_angle_deg(yaw_deg_sm, true);
                 pitch_encoder.read_angle_deg(pitch_deg_sm);
+                float azimuth_deg = std::fmod(filtered_imu_heading_deg + yaw_deg_sm + 360.0f, 360.0f);
 
                 constexpr float FALLBACK_LAT = 42.29243326092064f;
                 constexpr float FALLBACK_LON = -83.71498310538729f;
@@ -310,7 +334,7 @@ namespace telescope {
                     time.second = build_time::second();
                 }
 
-                state_machine.update_sensors(pitch_deg_sm, yaw_deg_sm, lat, lon, time);
+                state_machine.update_sensors(pitch_deg_sm, azimuth_deg, lat, lon, time);
                 state_machine.tick();
             }
 
