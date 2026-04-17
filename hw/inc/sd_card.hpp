@@ -48,9 +48,9 @@ public:
 
     int read_header(FileHeader& header);
 
-    int search_objects_in_bounds(float ra_min_deg, float ra_max_dec,
-                                 float dec_min_deg, float dec_max_deg,
-                                 std::vector<DSO>& out_objects);
+    int search_objects_in_bounds(float ra_min_deg, float ra_max_deg,
+                                  float dec_min_deg, float dec_max_deg,
+                                   std::vector<DSO>& out_objects);
     
     FileHeader get_header() {return header_;}
 

@@ -52,10 +52,23 @@ struct FOV {
 
 // TODO: mildly out of place?
 struct Telescope {
-    float objective_lens_diameter{1.25f}; //m
-    float eyepiece_focal_length{25.0f}; //mm
-    float telescope_focal_length{1200.0f}; //mm
+    float objective_lens_diameter{70.0f}; //mm
+    float eyepiece_focal_length{20.0f}; //mm
+    float telescope_focal_length{400.0f}; //mm
 
-    // calculate FOV?
-    int approximate_FOV_radius_deg() {return 0;}
+    // TODO: BELOW IS AN ESTIMATE:
+    float eyepiece_apparent_fov_deg{50.0f};
+
+    float magnification() const {
+        if (eyepiece_focal_length <= 0.0f) return 1.0f;
+        return telescope_focal_length / eyepiece_focal_length;
+    }
+
+    float approximate_FOV_radius_deg() const {
+        const float mag = magnification();
+        if (mag <= 0.0f) return 0.0f;
+        return eyepiece_apparent_fov_deg / mag;
+    }
+
+    float jank_FOV_radius_deg() const {return 1.25;}
 };
