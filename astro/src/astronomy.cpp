@@ -73,11 +73,19 @@ void Astronomy::convert_hc_to_eqc() {
     double dec_rad = std::asin(sin_dec);
 
     // 2.) calculate local hour angle (H)
-    double sin_H = (-std::sin(az_rad) * std::cos(alt_rad)) / std::cos(dec_rad);
-    double cos_H = (std::sin(alt_rad) - std::sin(lat_rad)*std::sin(dec_rad)) / 
-                   (std::cos(lat_rad) * std::cos(dec_rad));
-    
-    double H_rad = std::atan2(sin_H, cos_H);
+    // Guard against pole singularity: cos(dec) -> 0 when dec -> ±90°,
+    // which happens when pointing at the celestial pole. H is undefined there;
+    // use H=0 (telescope on meridian) as a safe fallback.
+    const double cos_dec = std::cos(dec_rad);
+    double H_rad;
+    if (std::abs(cos_dec) < 1e-9) {
+        H_rad = 0.0;
+    } else {
+        double sin_H = (-std::sin(az_rad) * std::cos(alt_rad)) / cos_dec;
+        double cos_H = (std::sin(alt_rad) - std::sin(lat_rad)*std::sin(dec_rad)) /
+                       (std::cos(lat_rad) * cos_dec);
+        H_rad = std::atan2(sin_H, cos_H);
+    }
 
     // 3.) calculate local sidereal time
     // calculate julian date (Y, M, D) from UTC (h, m, s)
@@ -204,7 +212,11 @@ int Astronomy::find_objects_within_FOV() {
     }
 
     current_FOV.objects = std::move(new_objects);
-    old_FOV = current_FOV;
+    // Only refresh the cache on a successful SD read. On error, keep old_FOV
+    // intact so the next tick can still intersect against previously found objects.
+    if (search_res == 0) {
+        old_FOV = current_FOV;
+    }
     return search_res;
 }
 

@@ -32,7 +32,7 @@ import struct
 from collections import defaultdict
 
 
-CSV_PATH = 'lib/messier_2.csv'
+CSV_PATH = 'messier.csv'
 OUT_PATH = "catalogue.bin"
 
 RA_BINS = 36 
@@ -81,8 +81,8 @@ def parse_ra(value: str) -> float:
         hours = float(s[:-1])
         return normalize_ra_deg(hours * 15.0)
 
-    # assume decimal degrees
-    return normalize_ra_deg(float(s))
+    # assume decimal hours (CSV stores RA in hours)
+    return normalize_ra_deg(float(s) * 15.0)
 
 def parse_dec(value: str) -> float:
     s = str(value).strip()
