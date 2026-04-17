@@ -44,6 +44,7 @@ public:
     int close_catalogue();
 
     bool is_open() const {return file_open_;}
+    int last_open_error() const {return last_open_err_;}
 
     int read_header(FileHeader& header);
 
@@ -58,13 +59,13 @@ private:
     int read_object_at_current_pos(BinObjectRecord& out_record);
     static int compute_bin_id(float ra_deg, float dec_deg, uint16_t ra_bin, uint16_t dec_bins);
 
-    FATFS fs_{};
     FIL file_{};
     bool mounted_{false};
     bool file_open_{false};
 
     FileHeader header_{};
     bool header_valid_{false};
+    int last_open_err_{0};
 };
 
 } //namespace telescope

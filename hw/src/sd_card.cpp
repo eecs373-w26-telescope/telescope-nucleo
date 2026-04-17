@@ -1,13 +1,15 @@
 #include <hw/inc/sd_card.hpp>
 
+extern FATFS SDFatFS;
+extern char SDPath[4];
+
 static constexpr uint32_t MAGIC = 0x44534F31;
-static constexpr const char* MOUNT_PATH = ""; // default
 
 namespace telescope {
 int SDCard::mount() {
     if (mounted_) return 0;
 
-    FRESULT res = f_mount(&fs_, MOUNT_PATH, 1);
+    FRESULT res = f_mount(&SDFatFS, SDPath, 1);
     mounted_ = (res == FR_OK);
     return mounted_ ? 0 : -1;
 }
@@ -15,7 +17,7 @@ int SDCard::mount() {
 int SDCard::unmount() {
     if (!mounted_) return 0;
 
-    FRESULT res = f_mount(nullptr, MOUNT_PATH, 1);
+    FRESULT res = f_mount(nullptr, SDPath, 1);
     mounted_ = false;
     return (res == FR_OK) ? 0 : -1;
 }
@@ -26,7 +28,7 @@ int SDCard::open_catalogue(const char* path) {
 
     FRESULT res = f_open(&file_, path, FA_READ);
     file_open_ = (res == FR_OK);
-    if (!file_open_) return -1;
+    if (!file_open_) { last_open_err_ = static_cast<int>(res); return -1; }
 
     FileHeader header{};
     if(read_header(header) != 0) {close_catalogue(); return -1;}
@@ -157,7 +159,7 @@ int SDCard::search_objects_in_bounds(float ra_min_deg,
                 if (rec.ra_deg >= ra_min_deg && rec.ra_deg <= ra_max_deg &&
                     rec.dec_deg >= dec_min_deg && rec.dec_deg <= dec_max_deg) {
                     DSO obj{};
-                    obj.name = std::to_string(rec.id); // replace with real name lookup later
+                    obj.name = "M" + std::to_string(rec.id);
                     obj.pos.right_ascension = rec.ra_deg / 15.0f; // convert deg -> hours
                     obj.pos.declination = rec.dec_deg;
                     obj.brightness = rec.mag;

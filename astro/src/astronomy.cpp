@@ -174,13 +174,7 @@ void Astronomy::find_objects_within_FOV() {
     compute_equatorial_bounds(current_FOV, ra_min_deg, ra_max_deg, dec_min_deg, dec_max_deg);
 
     std::vector<DSO> candidates;
-    if (db.mount() == 0) {
-        if (db.open_catalogue("catalogue.bin") == 0) {
-            db.search_objects_in_bounds(ra_min_deg, ra_max_deg, dec_min_deg, dec_max_deg, candidates);
-            db.close_catalogue();
-        }
-        db.unmount();
-    }
+    db.search_objects_in_bounds(ra_min_deg, ra_max_deg, dec_min_deg, dec_max_deg, candidates);
 
     for (const auto& obj : candidates) {
         if (!is_object_in_FOV(obj, current_FOV)) {

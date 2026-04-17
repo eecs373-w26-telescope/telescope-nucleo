@@ -134,8 +134,12 @@ namespace telescope {
         xpt.init(); 
         //TODO: ADD ANYTHING ELSE TO INITIALIZE THE TOUCH SCREEN HERE
 
-        sd_card.mount();
-        sd_card.open_catalogue("catalogue.bin");
+        int mount_res = sd_card.mount();
+        int open_res  = sd_card.open_catalogue("0:catalogue.bin");
+        char sd_buf[64];
+        int sd_len = snprintf(sd_buf, sizeof(sd_buf), "SD mount:%d open:%d fopen_err:%d\r\n",
+                              mount_res, open_res, sd_card.last_open_error());
+        HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(sd_buf), static_cast<uint16_t>(sd_len), 100);
 
         state_machine.init();
     }
