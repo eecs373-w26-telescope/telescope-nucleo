@@ -268,7 +268,7 @@ namespace telescope {
                                       state_machine.last_search_result(),
                                       static_cast<double>(eqc.right_ascension),
                                       static_cast<double>(eqc.declination),
-                                      gps.has_fix() ? "" : " [FALLBACK]");
+                                      gps.has_fix() ? "" : (raspi.has_raspi_time() ? " [RASPI-TIME]" : " [BUILD-TIME]"));
                 HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(sm_buf),
                                   static_cast<uint16_t>(sm_len), 100);
 
@@ -343,6 +343,8 @@ namespace telescope {
                     time.hour   = gps.utc_hours;
                     time.minute = gps.utc_minutes;
                     time.second = static_cast<int>(gps.utc_seconds);
+                } else if (raspi.has_raspi_time()) {
+                    time = raspi.raspi_time();
                 } else {
                     time.year   = build_time::year();
                     time.month  = build_time::month();

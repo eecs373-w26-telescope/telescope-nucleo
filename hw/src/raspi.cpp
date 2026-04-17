@@ -1,5 +1,6 @@
 #include <hw/inc/raspi.hpp>
 #include <cstring>
+#include <astro/inc/units.hpp>
 
 namespace telescope {
 
@@ -83,6 +84,20 @@ namespace telescope {
                 std::memcpy(&sync, payload, sizeof(sync));
                 current_state_ = sync.state;
                 last_state_sync_tick_ = HAL_GetTick();
+            }
+            break;
+
+        case PACKET_TIME:
+            if (length >= sizeof(TimePayload)) {
+                TimePayload t;
+                std::memcpy(&t, payload, sizeof(t));
+                raspi_time_.year   = t.year;
+                raspi_time_.month  = t.month;
+                raspi_time_.day    = t.day;
+                raspi_time_.hour   = t.hour;
+                raspi_time_.minute = t.minute;
+                raspi_time_.second = t.second;
+                has_raspi_time_ = true;
             }
             break;
 

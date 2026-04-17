@@ -2,6 +2,7 @@
 
 #include "main.h"
 #include <hw/inc/protocol.h>
+#include <astro/inc/units.hpp>
 #include <cstdint>
 
 namespace telescope {
@@ -33,6 +34,10 @@ namespace telescope {
         // Current mirrored state from raspi (updated by STATE_SYNC packets)
         uint8_t mirrored_state();
         bool    connection_active();
+
+        // Time received from raspi (updated by PACKET_TIME)
+        bool has_raspi_time() const { return has_raspi_time_; }
+        UTC  raspi_time()     const { return raspi_time_; }
 
         // Called by HAL from ISR context
         void tx_complete_callback();
@@ -76,6 +81,10 @@ namespace telescope {
         // Mirrored state from raspi
         volatile uint8_t current_state_ = 0;
         volatile uint32_t last_state_sync_tick_ = 0;
+
+        // Time from raspi
+        bool has_raspi_time_ = false;
+        UTC  raspi_time_ = {};
 
         void dispatch_packet(uint8_t packet_id, const uint8_t* payload, uint8_t length);
         void process_byte(uint8_t byte);
