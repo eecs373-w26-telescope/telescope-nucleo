@@ -7,8 +7,9 @@
 namespace telescope {
 
     //Constructor
-    Encoder::Encoder(SPI_HandleTypeDef* hspi, GPIO_TypeDef* csPort, uint16_t csPin)
-    : hspi_(hspi), csPort_(csPort), csPin_(csPin){}
+    Encoder::Encoder(SPI_HandleTypeDef* hspi, GPIO_TypeDef* csPort, uint16_t csPin,
+                     uint16_t offset)
+    : hspi_(hspi), csPort_(csPort), csPin_(csPin), offset_(offset){}
 
     // Drive CS Low
     void Encoder::cs_low(){
@@ -96,18 +97,20 @@ namespace telescope {
         return HAL_OK;
     }
 
-    HAL_StatusTypeDef Encoder::read_raw_angle(uint16_t& rawangle){
-        return read_register(encoder_reg::AS5048_ANGLE, rawangle);
+    HAL_StatusTypeDef Encoder::read_raw_angle(uint16_t& rawangle, bool invert){
+        uint16_t raw = 0;
+        HAL_StatusTypeDef status = read_register(encoder_reg::AS5048_ANGLE, raw);
+        if(status != HAL_OK) return status;
+        if (invert) raw = (AS5048_FULL - raw) % AS5048_FULL;
+        rawangle = (raw + AS5048_FULL - offset_) % AS5048_FULL;
+        return HAL_OK;
     }
 
-    HAL_StatusTypeDef Encoder::read_angle_deg(float& angleDeg){
+    HAL_StatusTypeDef Encoder::read_angle_deg(float& angleDeg, bool invert){
         uint16_t raw = 0;
-        HAL_StatusTypeDef status = read_raw_angle(raw);
-        if(status != HAL_OK){
-            return status;
-        }
+        HAL_StatusTypeDef status = read_raw_angle(raw, invert);
+        if(status != HAL_OK) return status;
         angleDeg = (360.0f * static_cast<float>(raw)) / 16384.0f;
-
         return HAL_OK;
     }
     

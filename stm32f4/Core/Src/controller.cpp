@@ -78,8 +78,8 @@ namespace telescope {
     /***********************
     HARDWARE INITIALIZATION
     ************************/
-    Encoder yaw_encoder(&hspi1, ENCODER_YAW_CS_PORT, ENCODER_YAW_CS_PIN);
-    Encoder pitch_encoder(&hspi1, ENCODER_PITCH_CS_PORT, ENCODER_PITCH_CS_PIN);
+    Encoder yaw_encoder(&hspi1, ENCODER_YAW_CS_PORT, ENCODER_YAW_CS_PIN, YAW_OFFSET);
+    Encoder pitch_encoder(&hspi1, ENCODER_PITCH_CS_PORT, ENCODER_PITCH_CS_PIN, PITCH_OFFSET);
 
     GPS gps(&huart6);
     IMU imu(&hi2c1);
@@ -172,7 +172,7 @@ namespace telescope {
                 last_encoder_tick = now;
                 EncoderPayload payload{};
                 uint16_t raw = 0;
-                bool yaw_ok = (yaw_encoder.read_raw_angle(raw) == HAL_OK);
+                bool yaw_ok = (yaw_encoder.read_raw_angle(raw, true) == HAL_OK);
                 if (yaw_ok) payload.yaw_raw = yaw_filter.update(raw);
                 bool pitch_ok = (pitch_encoder.read_raw_angle(raw) == HAL_OK);
                 if (pitch_ok) payload.pitch_raw = pitch_filter.update(raw);
@@ -185,7 +185,7 @@ namespace telescope {
                 uint8_t cal = imu.get_calibration();
                 float yaw_deg = 0.0f;
                 float pitch_deg = 0.0f;
-                yaw_encoder.read_angle_deg(yaw_deg); //TODO: DID THIS FUNCTION CHANGE?
+                yaw_encoder.read_angle_deg(yaw_deg, true);
                 pitch_encoder.read_angle_deg(pitch_deg);
                 char buf[120];
                 int len = snprintf(buf, sizeof(buf),
@@ -230,7 +230,7 @@ namespace telescope {
                 last_sm_tick = now;
                 float yaw_deg_sm = 0.0f;
                 float pitch_deg_sm = 0.0f;
-                yaw_encoder.read_angle_deg(yaw_deg_sm); //TODO: DID THIS FUNCTION CHANGE?
+                yaw_encoder.read_angle_deg(yaw_deg_sm, true);
                 pitch_encoder.read_angle_deg(pitch_deg_sm);
 
                 float lat = static_cast<float>(gps.latitude);

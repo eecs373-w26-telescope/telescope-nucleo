@@ -16,16 +16,20 @@ namespace telescope {
 
     class Encoder{
         public:
-            Encoder(SPI_HandleTypeDef* hspi, GPIO_TypeDef* csPort,  uint16_t csPin);
+            Encoder(SPI_HandleTypeDef* hspi, GPIO_TypeDef* csPort,  uint16_t csPin,
+                    uint16_t offset = 0);
 
-            HAL_StatusTypeDef read_raw_angle(uint16_t& rawAngle);
-            HAL_StatusTypeDef read_angle_deg(float& angleDeg);
+            HAL_StatusTypeDef read_raw_angle(uint16_t& rawAngle, bool invert = false);
+            HAL_StatusTypeDef read_angle_deg(float& angleDeg, bool invert = false);
+
             HAL_StatusTypeDef clear_error();
-    
+
         private:
+            static constexpr uint16_t AS5048_FULL = 16384;
             SPI_HandleTypeDef* hspi_ = nullptr;
             GPIO_TypeDef* csPort_ = nullptr;
             uint16_t csPin_;
+            uint16_t offset_;
     
             void cs_low();
             void cs_high();
