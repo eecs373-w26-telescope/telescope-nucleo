@@ -61,6 +61,7 @@ void Astronomy::convert_hc_to_eqc() {
     // 0.) convert from deg to radians to make trig easier
     double alt_rad = deg2rad(hc.altitude);
     double az_rad  = deg2rad(hc.azimuth);
+    az_rad = M_PI - az_rad;
     double lat_rad = deg2rad(gc.latitude);
     
     // 1.) calculate declination (dec)
@@ -68,9 +69,7 @@ void Astronomy::convert_hc_to_eqc() {
                      std::cos(alt_rad) * std::cos(lat_rad)*std::cos(az_rad);
     
     // clamp against floating point drift
-    if (sin_dec > 1.0) sin_dec = 1.0;
-    if (sin_dec < -1.0) sin_dec = -1.0;
-
+    sin_dec = std::max(-1.0, std::min(1.0, sin_dec));
     double dec_rad = std::asin(sin_dec);
 
     // 2.) calculate local hour angle (H)
@@ -82,33 +81,39 @@ void Astronomy::convert_hc_to_eqc() {
 
     // 3.) calculate local sidereal time
     // calculate julian date (Y, M, D) from UTC (h, m, s)
-    UTC jd_utc = utc;
-    if (jd_utc.month <= 2) { jd_utc.year--; jd_utc.month += 12; }
+    int year  = utc.year;
+    int month = utc.month;
+    int day   = utc.day;
+    int hour  = utc.hour;
+    int minute = utc.minute;
+    int second = utc.second;
 
-    int A = static_cast<int>(std::floor(jd_utc.year / 100.0));
+    if (month <= 2) {
+        year -= 1;
+        month += 12;
+    }
+
+    int A = static_cast<int>(std::floor(year / 100.0));
     int B = 2 - A + static_cast<int>(std::floor(A / 4.0));
 
-    double day_frac = jd_utc.day + (jd_utc.hour / 24.0)
-                                 + (jd_utc.minute / 1440.0)
-                                 + (jd_utc.second / 86400.0);
+    double day_frac = day +
+                      (hour / 24.0) +
+                      (minute / 1440.0) +
+                      (second / 86400.0);
 
-    double JD = std::floor(365.25 * (jd_utc.year + 4716)) +
-                std::floor(30.6001 * (jd_utc.month + 1)) +
+    double JD = std::floor(365.25 * (year + 4716)) +
+                std::floor(30.6001 * (month + 1)) +
                 day_frac + B - 1524.5;
-    
-    // calculate greenwich mean standard time
+
     double d = JD - 2451545.0;
-    double GMST_hours = wrap24(18.697374558 + 24.06570982441908*d);
+    double GMST_hours = wrap24(18.697374558 + 24.06570982441908 * d);
+    double LST_hours  = wrap24(GMST_hours + gc.longitude / 15.0);
 
-    double LST_hours = wrap24(GMST_hours + gc.longitude/15.0);
-
-    // 4.) calculate right ascension 
     double H_hours = H_rad * 12.0 / M_PI;
     double RA_hours = wrap24(LST_hours - H_hours);
 
-    // set RA/decl
     eqc.right_ascension = static_cast<float>(RA_hours);
-    eqc.declination = static_cast<float>(rad2deg(dec_rad)); 
+    eqc.declination = static_cast<float>(rad2deg(dec_rad));
 }
 
 
@@ -201,4 +206,8 @@ int Astronomy::find_objects_within_FOV() {
     current_FOV.objects = std::move(new_objects);
     old_FOV = current_FOV;
     return search_res;
+}
+
+HorizontalCoordinates Astronomy::get_horizontal() const {
+    return hc;
 }

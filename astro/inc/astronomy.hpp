@@ -22,6 +22,8 @@ public:
     bool is_object_in_FOV(const DSO& object, const FOV& fov);
     float calculate_object_distance_from_FOV(const DSO& object, const FOV& fov);
 
+    HorizontalCoordinates get_horizontal() const;
+
 private:
     const Telescope telescope;
     telescope::SDCard& db;
