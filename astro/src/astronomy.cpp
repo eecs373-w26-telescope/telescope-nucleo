@@ -31,7 +31,7 @@ double Astronomy::angular_distance_deg(const EquatorialCoordinates& a,
     std::cos(dec1) * std::cos(dec2) * std::cos(ra1 - ra2);
 
     cos_theta = std::max(-1.0, std::min(1.0, cos_theta));
-    return rad2deg(std::acos(cos_theta));
+    return static_cast<float>(rad2deg(std::acos(cos_theta)));
 }
 
 int Astronomy::calculate_adjusted_altitude(int raw_altitude_deg) const {
@@ -73,19 +73,11 @@ void Astronomy::convert_hc_to_eqc() {
     double dec_rad = std::asin(sin_dec);
 
     // 2.) calculate local hour angle (H)
-    // Guard against pole singularity: cos(dec) -> 0 when dec -> ±90°,
-    // which happens when pointing at the celestial pole. H is undefined there;
-    // use H=0 (telescope on meridian) as a safe fallback.
-    const double cos_dec = std::cos(dec_rad);
-    double H_rad;
-    if (std::abs(cos_dec) < 1e-9) {
-        H_rad = 0.0;
-    } else {
-        double sin_H = (-std::sin(az_rad) * std::cos(alt_rad)) / cos_dec;
-        double cos_H = (std::sin(alt_rad) - std::sin(lat_rad)*std::sin(dec_rad)) /
-                       (std::cos(lat_rad) * cos_dec);
-        H_rad = std::atan2(sin_H, cos_H);
-    }
+    double sin_H = (-std::sin(az_rad) * std::cos(alt_rad)) / std::cos(dec_rad);
+    double cos_H = (std::sin(alt_rad) - std::sin(lat_rad)*std::sin(dec_rad)) / 
+                   (std::cos(lat_rad) * std::cos(dec_rad));
+    
+    double H_rad = std::atan2(sin_H, cos_H);
 
     // 3.) calculate local sidereal time
     // calculate julian date (Y, M, D) from UTC (h, m, s)
@@ -127,8 +119,7 @@ void Astronomy::convert_hc_to_eqc() {
 
 void Astronomy::calculate_FOV() {
     current_FOV.center_pos = eqc;
-    // current_FOV.radius = telescope.approximate_FOV_radius_deg(); // TODO: IMPLEMENT
-    current_FOV.radius = 10.0f;
+    current_FOV.radius = telescope.approximate_FOV_radius_deg(); // TODO: IMPLEMENT
     current_FOV.objects.clear();
 }
 
@@ -144,7 +135,7 @@ std::vector<DSO> Astronomy::intersected_points(const FOV& new_fov, const FOV& ol
     std::vector<DSO> intersected_objects;
 
     for (const auto& object : old_FOV.objects) {
-        if (is_object_in_FOV(object, new_fov)) {
+        if (is_object_in_FOV(object, old_FOV) && is_object_in_FOV(object, new_fov)) {
             intersected_objects.emplace_back(object);
         }
     }
@@ -158,19 +149,16 @@ void Astronomy::compute_equatorial_bounds(const FOV& fov, float& ra_min_deg, flo
         const float center_ra_deg = fov.center_pos.right_ascension * 15.0f;
         const float center_dec_deg = fov.center_pos.declination;
 
-        const float cos_dec = std::cos(center_dec_deg * static_cast<float>(M_PI) / 180.0f);
-        // Cap ra_stretch at 180 so that near-pole pointings still produce a valid
-        // [ra_min, ra_max] range that search_objects_in_bounds can handle (it detects
-        // full-circle coverage when the span >= 360).
-        const float ra_stretch = (cos_dec > 0.01f) ? std::min(fov.radius / cos_dec, 180.0f) : 180.0f;
-
-        ra_min_deg = center_ra_deg - ra_stretch;
-        ra_max_deg = center_ra_deg + ra_stretch;
+        ra_min_deg = center_ra_deg - fov.radius;
+        ra_max_deg = center_ra_deg + fov.radius;
         dec_min_deg = center_dec_deg - fov.radius;
         dec_max_deg = center_dec_deg + fov.radius;
 
         if (dec_min_deg < -90.0f) dec_min_deg = -90.0f;
         if (dec_max_deg > 90.0f) dec_max_deg = 90.0f;
+
+        // TODO: for now, assume no RA wraparound handling.
+        // Add wrap logic later if FOV crosses 0h / 360°.
 }
 
 
@@ -212,11 +200,7 @@ int Astronomy::find_objects_within_FOV() {
     }
 
     current_FOV.objects = std::move(new_objects);
-    // Only refresh the cache on a successful SD read. On error, keep old_FOV
-    // intact so the next tick can still intersect against previously found objects.
-    if (search_res == 0) {
-        old_FOV = current_FOV;
-    }
+    old_FOV = current_FOV;
     return search_res;
 }
 

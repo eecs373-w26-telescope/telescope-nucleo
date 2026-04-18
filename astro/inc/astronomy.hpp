@@ -9,7 +9,7 @@ public:
     Astronomy(const Telescope& telescope, telescope::SDCard& sdcard);
 
     EquatorialCoordinates get_equatorial_coordinates() const {return eqc;}
-    HorizontalCoordinates get_horizontal_coordinates() {return hc;}
+    HorizontalCoordinates get_horizontal_coordinates() const {return hc;}
     const FOV& get_current_fov() const {return current_FOV;}
 
     void update_pose(float altitude_deg, float azimuth_deg,
