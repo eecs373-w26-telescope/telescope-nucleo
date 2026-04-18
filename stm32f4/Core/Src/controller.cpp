@@ -379,7 +379,13 @@ namespace telescope {
                 constexpr float RAW_TO_DEG = 360.0f / 16384.0f;
                 float yaw_deg_sm   = filtered_yaw_raw   * RAW_TO_DEG;
                 float pitch_deg_sm = filtered_pitch_raw * RAW_TO_DEG;
-                float azimuth_deg = std::fmod(filtered_imu_heading_deg + yaw_deg_sm + 360.0f, 360.0f);
+                //float azimuth_deg = std::fmod(filtered_imu_heading_deg + yaw_deg_sm + 360.0f, 360.0f);
+                //float az2 = std::fmod(filtered_imu_heading_deg - yaw_deg_sm + 360.0f, 360.0f);
+                //float azimuth_deg = std::fmod(filtered_imu_heading_deg + yaw_deg_sm + 180.0f + 360.0f, 360.0f);
+                //float az4 = std::fmod(filtered_imu_heading_deg - yaw_deg_sm + 180.0f + 360.0f, 360.0f);
+                float AZ_OFFSET_DEG = -48.2;
+                //float azimuth_deg = std::fmod(filtered_imu_heading_deg - yaw_deg_sm + AZ_OFFSET_DEG + 360.0f, 360.0f);
+                float azimuth_deg = std::fmod(filtered_imu_heading_deg + yaw_deg_sm + 360.0f + AZ_OFFSET_DEG, 360.0f);
 
                 constexpr float FALLBACK_LAT = 42.29243326092064f;
                 constexpr float FALLBACK_LON = -83.71498310538729f;
@@ -426,7 +432,7 @@ namespace telescope {
                     for (const auto& obj : fov.objects) {
                         if (pkt.count >= FOV_OBJECTS_MAX) break;
                         float x = 0.0f, y = 0.0f;
-                        Astronomy::project_gnomonic(fov.center_pos, obj.pos, fov.radius, x, y);
+                        state_machine.project_gnomonic_local_for_current_fov(obj.pos, x, y);
                         int id = std::stoi(obj.name.substr(1));
                         auto& e = pkt.objects[pkt.count++];
                         e.messier_id = static_cast<uint16_t>(id);
@@ -436,6 +442,7 @@ namespace telescope {
                     raspi.send_fov_objects(pkt, pkt.count);
                 }
 
+                //TODO: CHANGE GNOMONIC??
                 {
                     SearchGuidancePayload sg{};
                     if (state_machine.has_selected_object()) {
@@ -476,24 +483,6 @@ namespace telescope {
                 HorizontalCoordinates hc = state_machine.current_hc();
                 const FOV& fov = state_machine.current_fov();
 
-                if (now - last_az_debug_tick >= AZ_DEBUG_INTERVAL_MS) {
-                    last_az_debug_tick = now;
-                    char az_buf[120];
-                    int az_len = snprintf(az_buf, sizeof(az_buf),
-                        "RAW AZ DEBUG:\r\n"
-                        "  IMU HDG : %.2f deg\r\n"
-                        "  YAW ENC : %.2f deg\r\n"
-                        "  FINAL AZ: %.2f deg\r\n",
-                        static_cast<double>(filtered_imu_heading_deg),
-                        static_cast<double>(yaw_deg_sm),
-                        static_cast<double>(azimuth_deg)
-                    );
-                    HAL_UART_Transmit(&huart3,
-                        reinterpret_cast<uint8_t*>(az_buf),
-                        static_cast<uint16_t>(az_len),
-                        100);
-                }
-
                 if (now - last_astro_debug_tick >= ASTRO_DEBUG_INTERVAL_MS) {
                     last_astro_debug_tick = now;
                     char astro_buf[256];
@@ -501,6 +490,10 @@ namespace telescope {
                         "ASTRO:\r\n"
                         "  ALT: %.2f deg\r\n"
                         "  AZ : %.2f deg\r\n"
+                        //"  AZ 1: %.2f deg\r\n"
+                        //"  AZ 2: %.2f deg\r\n"
+                        //"  AZ 3: %.2f deg\r\n"
+                        //"  AZ 4: %.2f deg\r\n"
                         "  LAT: %.5f  LON: %.5f\r\n"
                         "  UTC: %04d-%02d-%02d %02d:%02d:%02d\r\n"
                         "  RA : %.2f hr\r\n"
@@ -508,6 +501,10 @@ namespace telescope {
                         "  FOV r: %.2f deg  objs:%d%s\r\n",
                         static_cast<double>(hc.altitude),
                         static_cast<double>(hc.azimuth),
+                       //static_cast<double>(azimuth_deg),
+                        //static_cast<double>(az2),
+                        //static_cast<double>(az3),
+                        //static_cast<double>(az4),
                         static_cast<double>(lat),
                         static_cast<double>(lon),
                         time.year, time.month, time.day,

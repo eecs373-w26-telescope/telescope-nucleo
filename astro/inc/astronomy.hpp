@@ -25,9 +25,16 @@ public:
     HorizontalCoordinates get_horizontal() const;
 
     static void project_gnomonic(const EquatorialCoordinates& center,
-                                 const EquatorialCoordinates& obj,
-                                 float fov_radius_deg,
-                                 float& x_out, float& y_out);
+        const EquatorialCoordinates& obj,
+        float fov_radius_deg,
+        float& x_out, float& y_out);
+
+    double compute_parallactic_angle_rad(const EquatorialCoordinates& center) const;
+
+    void project_gnomonic_local(const EquatorialCoordinates& center,
+        const EquatorialCoordinates& obj,
+        float fov_radius_deg,
+        float& x_out, float& y_out) const;
 
 private:
     const Telescope telescope;
@@ -44,9 +51,9 @@ private:
     int azimuth_offset_deg{0};
     int altitude_offset_deg{0};
 
-    double deg2rad(double deg);
-    double rad2deg(double rad);
-    double wrap24(double x);
+    static double deg2rad(double deg);
+    static double rad2deg(double rad);
+    static double wrap24(double x);
     double angular_distance_deg(const EquatorialCoordinates& a, const EquatorialCoordinates& b);
 
     std::vector<DSO> intersected_points(const FOV& new_FOV, const FOV& old_FOV);

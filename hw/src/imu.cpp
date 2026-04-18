@@ -10,7 +10,8 @@ namespace telescope {
         HAL_Delay(30);
 
         CalibData data;
-        calib_loaded_ = flash_load(data);
+        //calib_loaded_ = flash_load(data);
+        calib_loaded_ = false;
         if (calib_loaded_) {
             write_regs(IMU_reg::ACC_OFFSET_X_LSB, data.offsets, IMU_reg::CALIB_OFFSET_LEN);
         }
