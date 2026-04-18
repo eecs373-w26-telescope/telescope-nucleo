@@ -366,6 +366,8 @@ namespace telescope {
                 }
             }
 
+            touchscreen.tick(now);
+
             // State machine tick
             //TODO: I DONT THINK THIS STATE_MACHINE_INTERVAL IS NECESSARY
             if (now - last_sm_tick >= STATE_MACHINE_INTERVAL_MS) {

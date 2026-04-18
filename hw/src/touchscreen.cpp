@@ -520,8 +520,15 @@ namespace telescope{
 
     void Touchscreen::error(){
         popup("ERROR", "DSO NOT EXIST", "TRY AGAIN");
-        HAL_Delay(500);
-        draw_main();
+        error_pending_ = true;
+        error_until_tick_ = HAL_GetTick() + 500;
+    }
+
+    void Touchscreen::tick(uint32_t now){
+        if(error_pending_ && now >= error_until_tick_){
+            error_pending_ = false;
+            draw_main();
+        }
     }
 
     void Touchscreen::gosearch(){

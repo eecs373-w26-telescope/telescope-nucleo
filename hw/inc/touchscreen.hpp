@@ -34,6 +34,7 @@ namespace telescope {
             void view_change();
             void normal_process(char action, char button);
 
+            void tick(uint32_t now);
             bool get_search_status(); // returns whether in searching mode
             bool get_main(); // returns whether touchscreen is on the main screen
             bool get_view_status(); // returns whether general DSO identification is on/off
@@ -61,6 +62,8 @@ namespace telescope {
             int search_id_ = -1;
             bool search_ = false;
             bool main_ = false;
+            bool error_pending_ = false;
+            uint32_t error_until_tick_ = 0;
 
             void cs_low();
             void cs_high();
