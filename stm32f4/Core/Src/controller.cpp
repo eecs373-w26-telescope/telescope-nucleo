@@ -447,10 +447,12 @@ namespace telescope {
                     }
                     raspi.send_fov_objects(pkt, pkt.count);
                 }
-
+                
+                // Only show guidance arrow if we are actively searching for a target
                 {
                     SearchGuidancePayload sg{};
-                    if (state_machine.has_selected_object()) {
+                    if (state_machine.has_selected_object() && 
+                        state_machine.current_state() == StateMachine::TelescopeState::SEARCH) {
                         sg.has_target = 1;
                         float raw_x = 0.0f, raw_y = 0.0f;
                         const FOV& fov = state_machine.current_fov();
