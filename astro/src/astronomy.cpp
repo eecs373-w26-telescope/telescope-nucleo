@@ -352,20 +352,47 @@ void Astronomy::project_gnomonic_local(const EquatorialCoordinates& center,
     const EquatorialCoordinates& obj,
     float fov_radius_deg,
     float& x_out, float& y_out) const {
-    float x_eq = 0.0f;
-    float y_eq = 0.0f;
+    
+    // 1. Convert both the FOV center and the object into local Horizontal coordinates
+    HorizontalCoordinates cur_hc = get_target_horizontal(center);
+    HorizontalCoordinates obj_hc = get_target_horizontal(obj);
 
-    Astronomy::project_gnomonic(center, obj, fov_radius_deg, x_eq, y_eq);
+    // 2. Convert to radians for the projection formula
+    constexpr double DEG_TO_RAD = M_PI / 180.0;
+    const double h0 = cur_hc.altitude * DEG_TO_RAD;
+    const double A0 = cur_hc.azimuth * DEG_TO_RAD;
+    const double h  = obj_hc.altitude * DEG_TO_RAD;
+    const double A  = obj_hc.azimuth * DEG_TO_RAD;
 
-    const double q = compute_parallactic_angle_rad(center);
+    const double dAz = A - A0;
 
-    // Rotate equatorial projection into local horizon-aligned screen axes
-    const double x_rot =  x_eq * std::cos(q) + y_eq * std::sin(q);
-    const double y_rot = -x_eq * std::sin(q) + y_eq * std::cos(q);
+    // 3. Calculate the Horizontal Gnomonic Projection denominator
+    const double D = std::sin(h0) * std::sin(h) + 
+                     std::cos(h0) * std::cos(h) * std::cos(dAz);
 
-    // screen rotation to align with display physical orientation
-    x_out = static_cast<float>(-y_rot);
-    y_out = static_cast<float>( x_rot);
+    // Prevent rear-hemisphere projection rendering
+    if (D <= 1e-6) {
+        x_out = 9999.0f;
+        y_out = 9999.0f;
+        return;
+    }
+
+    const double fov_radius_rad = fov_radius_deg * DEG_TO_RAD;
+
+    // 4. Calculate native Cartesian coordinates
+    // x_hor represents physical Azimuth (Right/Left)
+    const double x_hor = (std::cos(h) * std::sin(dAz) / D) / fov_radius_rad;
+
+    // y_hor represents physical Altitude (Up/Down)
+    const double y_hor = ((std::cos(h0) * std::sin(h) - 
+                           std::sin(h0) * std::cos(h) * std::cos(dAz)) / D) / fov_radius_rad;
+
+    // 5. Apply the axis mapping to match display physical orientation
+    // x_out represents the screen X (Azimuth / Right-Left)
+    // y_out represents the screen Y (Altitude / Up-Down)
+    // We negate y_hor because screen Y-coordinates increase downward.
+    x_out = static_cast<float>(x_hor);
+    y_out = static_cast<float>(-y_hor);
 }
 
 void Astronomy::project_gnomonic_parallactic(const EquatorialCoordinates& center,

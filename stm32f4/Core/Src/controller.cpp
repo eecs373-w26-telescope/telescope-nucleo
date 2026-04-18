@@ -458,22 +458,27 @@ namespace telescope {
                         HorizontalCoordinates target_hc = state_machine.get_target_horizontal(state_machine.selected_object().pos);
                         HorizontalCoordinates current_hc = state_machine.current_hc();
 
-                        float dAz = target_hc.azimuth - current_hc.azimuth;
-                        if (dAz > 180.0f) dAz -= 360.0f;
-                        if (dAz < -180.0f) dAz += 360.0f;
+                        // Convert to radians for trig functions
+                        constexpr float DEG_TO_RAD = 3.14159265f / 180.0f;
+                        float tgt_alt_rad = target_hc.altitude * DEG_TO_RAD;
+                        float tgt_az_rad  = target_hc.azimuth * DEG_TO_RAD;
+                        float cur_alt_rad = current_hc.altitude * DEG_TO_RAD;
+                        float cur_az_rad  = current_hc.azimuth * DEG_TO_RAD;
 
-                        float dAlt = target_hc.altitude - current_hc.altitude;
+                        // Difference in azimuth
+                        float dAz_rad = tgt_az_rad - cur_az_rad;
 
-                        // dx = Azimuth error (Left/Right)
-                        // dy = Altitude error (Up/Down)
-                        // Flip dAz to align with guidance screen convention: target to the Right = +X
-                        float dx = -dAz; 
-                        float dy = dAlt;
+                        // Calculate singularity-free viewplane projection
+                        // dx represents the true physical "Right" vector
+                        // dy represents the true physical "Up" vector
+                        float dx = cosf(tgt_alt_rad) * sinf(dAz_rad);
+                        float dy = sinf(tgt_alt_rad) * cosf(cur_alt_rad) - 
+                                cosf(tgt_alt_rad) * sinf(cur_alt_rad) * cosf(dAz_rad);
 
                         float mag = sqrtf(dx * dx + dy * dy);
                         if (mag > 1e-6f) {
                             sg.dx_e4 = static_cast<int16_t>((dx / mag) * 10000.0f);
-                            sg.dy_e4 = static_cast<int16_t>((dy / mag) * 10000.0f);
+                            sg.dy_e4 = static_cast<int16_t>((-dy / mag) * 10000.0f); // Negate for screen Y-down
                         }
                         
                         float dist_deg = state_machine.get_distance_to_selected_object();
