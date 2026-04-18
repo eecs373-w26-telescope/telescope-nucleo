@@ -73,7 +73,7 @@ public:
     EquatorialCoordinates current_eqc() const { return astronomy_.get_equatorial_coordinates(); }
     const FOV& current_fov() const { return astronomy_.get_current_fov(); }
     int last_search_result() const { return last_search_result_; }
-    HorizontalCoordinates current_hc() const {return astronomy_.get_horizontal();
+    HorizontalCoordinates current_hc() const {return astronomy_.get_horizontal_coordinates();
 }
 
 private:
