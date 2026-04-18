@@ -119,7 +119,8 @@ int SDCard::search_objects_in_bounds(float ra_min_deg,
                                           float ra_max_deg,
                                           float dec_min_deg,
                                           float dec_max_deg,
-                                          std::vector<DSO>& out_objects) {
+                                          std::vector<DSO>& out_objects,
+                                          size_t max_count) {
     if (!file_open_ || !header_valid_) {
         return -1;
     }
@@ -149,6 +150,8 @@ int SDCard::search_objects_in_bounds(float ra_min_deg,
         if (f_lseek(&file_, idx.offset) != FR_OK) return -1;
 
         for (uint32_t i = 0; i < idx.count; ++i) {
+            if (max_count > 0 && out_objects.size() >= max_count) return 0;
+
             BinObjectRecord rec{};
             if (read_object_at_current_pos(rec) != 0) return -1;
 
@@ -159,7 +162,11 @@ int SDCard::search_objects_in_bounds(float ra_min_deg,
 
             if (in_ra && rec.dec_deg >= dec_min_deg && rec.dec_deg <= dec_max_deg) {
                 DSO obj{};
-                obj.name = "M" + std::to_string(rec.id);
+                if (rec.type == 1) {
+                    obj.name = "N" + std::to_string(rec.id);
+                } else {
+                    obj.name = "M" + std::to_string(rec.id);
+                }
                 obj.pos.right_ascension = rec.ra_deg / 15.0f;
                 obj.pos.declination = rec.dec_deg;
                 obj.brightness = rec.mag;
@@ -170,24 +177,56 @@ int SDCard::search_objects_in_bounds(float ra_min_deg,
     };
 
     for (int dec_bin = dec_bin_min; dec_bin <= dec_bin_max; ++dec_bin) {
+        if (max_count > 0 && out_objects.size() >= max_count) break;
+
         if (full_circle) {
             for (int ra_bin = 0; ra_bin < n_ra; ++ra_bin) {
+                if (max_count > 0 && out_objects.size() >= max_count) break;
                 if (scan_dec_ra(dec_bin, ra_bin) != 0) return -1;
             }
         } else if (!ra_wraps) {
             for (int ra_bin = ra_bin_lo; ra_bin <= ra_bin_hi; ++ra_bin) {
+                if (max_count > 0 && out_objects.size() >= max_count) break;
                 if (scan_dec_ra(dec_bin, ra_bin) != 0) return -1;
             }
         } else {
             for (int ra_bin = ra_bin_lo; ra_bin < n_ra; ++ra_bin) {
+                if (max_count > 0 && out_objects.size() >= max_count) break;
                 if (scan_dec_ra(dec_bin, ra_bin) != 0) return -1;
             }
             for (int ra_bin = 0; ra_bin <= ra_bin_hi; ++ra_bin) {
+                if (max_count > 0 && out_objects.size() >= max_count) break;
                 if (scan_dec_ra(dec_bin, ra_bin) != 0) return -1;
             }
         }
     }
 
     return 0;
+}
+
+bool SDCard::find_object_by_id(uint16_t id, uint16_t type, DSO& out_obj) {
+    if (!file_open_ || !header_valid_) return false;
+
+    // Scan all bins for the matching object
+    for (uint32_t b = 0; b < header_.total_bins; ++b) {
+        BinIndex idx{};
+        if (read_bin_index(b, idx) != 0) continue;
+        if (idx.count == 0) continue;
+        if (f_lseek(&file_, idx.offset) != FR_OK) continue;
+
+        for (uint32_t i = 0; i < idx.count; ++i) {
+            BinObjectRecord rec{};
+            if (read_object_at_current_pos(rec) != 0) break;
+
+            if (rec.id == id && rec.type == type) {
+                out_obj.name = (type == 1 ? "N" : "M") + std::to_string(rec.id);
+                out_obj.pos.right_ascension = rec.ra_deg / 15.0f;
+                out_obj.pos.declination = rec.dec_deg;
+                out_obj.brightness = rec.mag;
+                return true;
+            }
+        }
+    }
+    return false;
 }
 } // namespace telescope

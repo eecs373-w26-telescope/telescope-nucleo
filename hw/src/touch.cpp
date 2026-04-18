@@ -1,27 +1,9 @@
 #include <hw/inc/touch.hpp>
 #include <hw/inc/spi_mode.hpp>
+#include <hw/inc/display.hpp>
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
-
-static constexpr uint16_t LCD_W = 480;
-static constexpr uint16_t LCD_H = 320;
-
-static constexpr uint16_t TOP_BAR_H = 60;
-static constexpr uint16_t OPS_W = 140;
-static constexpr uint16_t KEYPAD_W = LCD_W - OPS_W;
-static constexpr uint16_t CONTENT_Y = TOP_BAR_H;
-static constexpr uint16_t CONTENT_H = LCD_H - TOP_BAR_H;
-static constexpr uint16_t GAP = 10;
-static constexpr uint16_t KEY_COLS = 3;
-static constexpr uint16_t KEY_ROWS = 4;
-static constexpr uint16_t KEY_W = (KEYPAD_W - GAP * (KEY_COLS+1)) / KEY_COLS;
-static constexpr uint16_t KEY_H = (CONTENT_H - GAP * (KEY_ROWS+1)) / KEY_ROWS;
-static constexpr uint16_t OPS_X = KEYPAD_W;
-static constexpr uint16_t OPS_BTN_W = OPS_W - 2 * GAP;
-static constexpr uint16_t OPS_BTN_H = (CONTENT_H - 4 * GAP)/3;
-static constexpr uint16_t DSO_VIEW_BOX_H = 40;
-static constexpr uint16_t DSO_VIEW_BOX_Y = 10;
 
 namespace telescope{
     Touch::Touch(SPI_HandleTypeDef* hspi, GPIO_TypeDef* cs_port, uint16_t cs_pin,
@@ -117,7 +99,7 @@ namespace telescope{
             {'1', '2', '3'},
             {'4', '5', '6'},
             {'7', '8', '9'},
-            {'T', '0', ' '}
+            {'T', '0', 'S'}
         };
 
         for(int r = 0; r < KEY_ROWS; r++){

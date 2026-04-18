@@ -119,7 +119,7 @@ void Astronomy::convert_hc_to_eqc() {
 void Astronomy::calculate_FOV() {
     current_FOV.center_pos = eqc;
     //current_FOV.radius = telescope.approximate_FOV_radius_deg(); // TODO: IMPLEMENT
-    current_FOV.radius = 10.0f;
+    current_FOV.radius = 2.0f;
     current_FOV.objects.clear();
 }
 

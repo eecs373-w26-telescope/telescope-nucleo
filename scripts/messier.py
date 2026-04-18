@@ -33,7 +33,7 @@ from collections import defaultdict
 
 
 CSV_PATH = 'messier.csv'
-OUT_PATH = "catalogue.bin"
+OUT_PATH = "messier.bin"
 
 RA_BINS = 36 
 DEC_BINS = 18

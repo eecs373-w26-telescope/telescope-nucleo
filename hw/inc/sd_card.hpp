@@ -20,7 +20,7 @@ public:
         uint32_t magic;
         uint16_t ra_bins;
         uint16_t dec_bins;
-        uint32_t total_bins; // TODO: TAKE OUT?
+        uint32_t total_bins;
     };
 
     struct BinIndex {
@@ -29,7 +29,8 @@ public:
     };
 
     struct BinObjectRecord {
-        uint32_t id;
+        uint16_t id;
+        uint16_t type; // 0=M, 1=N
         float ra_deg;
         float dec_deg;
         float mag;
@@ -50,9 +51,10 @@ public:
 
     int search_objects_in_bounds(float ra_min_deg, float ra_max_deg,
                                   float dec_min_deg, float dec_max_deg,
-                                   std::vector<DSO>& out_objects);
-    
-    FileHeader get_header() {return header_;}
+                                   std::vector<DSO>& out_objects,
+                                   size_t max_count = 0);
+
+    bool find_object_by_id(uint16_t id, uint16_t type, DSO& out_obj);
 
 private:
     int read_bin_index(uint32_t bin_id, BinIndex& out_index);

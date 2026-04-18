@@ -191,8 +191,7 @@ namespace telescope {
 
         int mount_res = sd_card.mount();
         int open_res  = sd_card.open_catalogue("0:catalogue.bin");
-        char sd_buf[64];
-        int sd_len = snprintf(sd_buf, sizeof(sd_buf), "SD mount:%d open:%d fopen_err:%d\r\n",
+        char sd_buf[64];        int sd_len = snprintf(sd_buf, sizeof(sd_buf), "SD mount:%d open:%d fopen_err:%d\r\n",
                               mount_res, open_res, sd_card.last_open_error());
         HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(sd_buf), static_cast<uint16_t>(sd_len), 100);
 
@@ -204,19 +203,33 @@ namespace telescope {
         HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(time_buf), static_cast<uint16_t>(time_len), 100);
 
         if (open_res == 0) {
-            std::vector<DSO> all_objects;
-            sd_card.search_objects_in_bounds(0.0f, 359.99f, -90.0f, 90.0f, all_objects);
-            char hdr[32];
-            int hdr_len = snprintf(hdr, sizeof(hdr), "DSO dump: %d objects\r\n", static_cast<int>(all_objects.size()));
-            HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(hdr), static_cast<uint16_t>(hdr_len), 100);
-            for (const auto& obj : all_objects) {
-                char obj_buf[64];
-                int obj_len = snprintf(obj_buf, sizeof(obj_buf), "  %s RA=%.2f DEC=%.2f mag=%.1f\r\n",
+            std::vector<DSO> dump;
+            // Search whole sky but limit to enough objects to find 10 of each
+            sd_card.search_objects_in_bounds(0.0f, 359.99f, -90.0f, 90.0f, dump, 200);
+
+            const char* hdr = "Catalogue Dump (First 10 M and 10 NGC):\r\n";
+            HAL_UART_Transmit(&huart3, reinterpret_cast<const uint8_t*>(hdr), 40, 100);
+
+            int m_count = 0, n_count = 0;
+            for (const auto& obj : dump) {
+                bool is_ngc = (obj.name.find("N") != std::string::npos);
+                if (is_ngc && n_count < 10) {
+                    n_count++;
+                } else if (!is_ngc && m_count < 10) {
+                    m_count++;
+                } else {
+                    continue;
+                }
+
+                char obj_buf[80];
+                int obj_len = snprintf(obj_buf, sizeof(obj_buf), "  %s RA=%.2fh DEC=%.2fd mag=%.1f\r\n",
                                        obj.name.c_str(),
                                        static_cast<double>(obj.pos.right_ascension),
                                        static_cast<double>(obj.pos.declination),
                                        static_cast<double>(obj.brightness));
                 HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(obj_buf), static_cast<uint16_t>(obj_len), 100);
+
+                if (m_count >= 10 && n_count >= 10) break;
             }
         }
 
@@ -339,7 +352,7 @@ namespace telescope {
 
                 StateSyncPayload sync{};
                 sync.state    = static_cast<uint8_t>(state_machine.current_state());
-                sync.flags    = 0;
+                sync.flags    = (touchscreen.get_selected_catalogue() == CatalogueType::NGC) ? 0x01 : 0x00;
                 sync.sequence = 0;
                 raspi.send_state_sync(sync);
             }
@@ -385,12 +398,7 @@ namespace telescope {
                     pitch_deg_sm -= 360.0f;
                 }
 
-                //float azimuth_deg = std::fmod(filtered_imu_heading_deg + yaw_deg_sm + 360.0f, 360.0f);
-                //float az2 = std::fmod(filtered_imu_heading_deg - yaw_deg_sm + 360.0f, 360.0f);
-                //float azimuth_deg = std::fmod(filtered_imu_heading_deg + yaw_deg_sm + 180.0f + 360.0f, 360.0f);
-                //float az4 = std::fmod(filtered_imu_heading_deg - yaw_deg_sm + 180.0f + 360.0f, 360.0f);
                 float AZ_OFFSET_DEG = -48.2;
-                //float azimuth_deg = std::fmod(filtered_imu_heading_deg - yaw_deg_sm + AZ_OFFSET_DEG + 360.0f, 360.0f);
                 float azimuth_deg = std::fmod(filtered_imu_heading_deg + yaw_deg_sm + 360.0f + AZ_OFFSET_DEG, 360.0f);
 
                 constexpr float FALLBACK_LAT = 42.29243326092064f;
@@ -439,9 +447,21 @@ namespace telescope {
                         if (pkt.count >= FOV_OBJECTS_MAX) break;
                         float x = 0.0f, y = 0.0f;
                         state_machine.project_gnomonic_local_for_current_fov(obj.pos, x, y);
-                        int id = std::stoi(obj.name.substr(1));
+                        
+                        // Parse name for ID and mode
+                        int id = 0;
+                        uint8_t mode = 0; // 0=M, 1=N
+                        if (obj.name.find("N") != std::string::npos) {
+                            id = std::stoi(obj.name.substr(1));
+                            mode = 1;
+                        } else if (obj.name.find("M") != std::string::npos) {
+                            id = std::stoi(obj.name.substr(1));
+                            mode = 0;
+                        }
+
                         auto& e = pkt.objects[pkt.count++];
-                        e.messier_id = static_cast<uint16_t>(id);
+                        e.catalog_id   = static_cast<uint16_t>(id);
+                        e.catalog_mode = mode;
                         e.x_e4 = static_cast<int16_t>(std::clamp(x, -1.0f, 1.0f) * 10000.0f);
                         e.y_e4 = static_cast<int16_t>(std::clamp(y, -1.0f, 1.0f) * 10000.0f);
                     }
@@ -469,8 +489,6 @@ namespace telescope {
                         float dAz_rad = tgt_az_rad - cur_az_rad;
 
                         // Calculate singularity-free viewplane projection
-                        // dx represents the true physical "Right" vector
-                        // dy represents the true physical "Up" vector
                         float dx = cosf(tgt_alt_rad) * sinf(dAz_rad);
                         float dy = sinf(tgt_alt_rad) * cosf(cur_alt_rad) - 
                                 cosf(tgt_alt_rad) * sinf(cur_alt_rad) * cosf(dAz_rad);
@@ -512,10 +530,6 @@ namespace telescope {
                         "ASTRO:\r\n"
                         "  ALT: %.2f deg\r\n"
                         "  AZ : %.2f deg\r\n"
-                        //"  AZ 1: %.2f deg\r\n"
-                        //"  AZ 2: %.2f deg\r\n"
-                        //"  AZ 3: %.2f deg\r\n"
-                        //"  AZ 4: %.2f deg\r\n"
                         "  LAT: %.5f  LON: %.5f\r\n"
                         "  UTC: %04d-%02d-%02d %02d:%02d:%02d\r\n"
                         "  RA : %.2f hr\r\n"
@@ -523,10 +537,6 @@ namespace telescope {
                         "  FOV r: %.2f deg  objs:%d%s\r\n",
                         static_cast<double>(hc.altitude),
                         static_cast<double>(hc.azimuth),
-                       //static_cast<double>(azimuth_deg),
-                        //static_cast<double>(az2),
-                        //static_cast<double>(az3),
-                        //static_cast<double>(az4),
                         static_cast<double>(lat),
                         static_cast<double>(lon),
                         time.year, time.month, time.day,

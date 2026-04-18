@@ -88,6 +88,8 @@ public:
         DSOTargetPayload pkt{};
         pkt.status         = DSO_OK;
         pkt.catalog_number = static_cast<uint16_t>(selected_messier_id_);
+        pkt.catalog_mode   = (touchscreen_.get_selected_catalogue() == CatalogueType::NGC) ? 1 : 0;
+        
         if (has_selected_object_) {
             pkt.ra_mas       = static_cast<int32_t>(selected_object_.pos.right_ascension * 54000000.0f);
             pkt.dec_mas      = static_cast<int32_t>(selected_object_.pos.declination * 3600000.0f);
@@ -95,7 +97,8 @@ public:
             const size_t n = std::min(selected_object_.name.size(), sizeof(pkt.name) - 1);
             std::memcpy(pkt.name, selected_object_.name.c_str(), n);
         } else {
-            const std::string nm = "M" + std::to_string(selected_messier_id_);
+            const char* prefix = (pkt.catalog_mode == 1) ? "N" : "M";
+            const std::string nm = prefix + std::to_string(selected_messier_id_);
             const size_t n = std::min(nm.size(), sizeof(pkt.name) - 1);
             std::memcpy(pkt.name, nm.c_str(), n);
         }
@@ -136,9 +139,10 @@ private:
         last_search_result_ = astronomy_.find_objects_within_FOV();
     }
 
-    bool try_select_target_from_current_fov(int messier_id) {
+    bool try_select_target_from_current_fov(int catalog_id) {
         const auto& objs = astronomy_.get_current_fov().objects;
-        const std::string target_name = "M" + std::to_string(messier_id);
+        const char* prefix = (touchscreen_.get_selected_catalogue() == CatalogueType::Messier) ? "M" : "N";
+        const std::string target_name = prefix + std::to_string(catalog_id);
 
         for (const auto& obj : objs) {
             if (obj.name == target_name) {
@@ -152,18 +156,11 @@ private:
         return false;
     }
 
-    bool lookup_target_globally(int messier_id) {
-        const std::string target_name = "M" + std::to_string(messier_id);
-        std::vector<DSO> results;
-        if (sdcard_.search_objects_in_bounds(0.0f, 359.99f, -90.0f, 90.0f, results) != 0) {
-            return false;
-        }
-        for (const auto& obj : results) {
-            if (obj.name == target_name) {
-                selected_object_ = obj;
-                has_selected_object_ = true;
-                return true;
-            }
+    bool lookup_target_globally(int catalog_id) {
+        uint16_t type = (touchscreen_.get_selected_catalogue() == CatalogueType::NGC) ? 1 : 0;
+        if (sdcard_.find_object_by_id(static_cast<uint16_t>(catalog_id), type, selected_object_)) {
+            has_selected_object_ = true;
+            return true;
         }
         return false;
     }
@@ -172,7 +169,10 @@ private:
         current_state_ = next;
         StateSyncPayload payload{};
         payload.state = static_cast<uint8_t>(current_state_);
-        payload.flags = 0;
+        
+        // bit 0 of flags: 0=M, 1=N
+        payload.flags = (touchscreen_.get_selected_catalogue() == CatalogueType::NGC) ? 0x01 : 0x00;
+        
         payload.sequence = state_sequence_++;
         raspi_.send_state_sync(payload);
     }
