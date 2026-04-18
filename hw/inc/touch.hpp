@@ -22,7 +22,10 @@ namespace telescope{
                   GPIO_TypeDef* irq_port, uint16_t irq_pin);
             void init();
             bool is_pressed();
-            bool process();
+
+            // bool process();
+            bool process(bool config_mode);
+
             char get_button();
             void calibration();
 
@@ -44,6 +47,9 @@ namespace telescope{
             bool read_raw(uint16_t* x, uint16_t* y);
             bool read_average_raw(uint16_t* x, uint16_t* y);
             bool convert_px(uint16_t raw_x, uint16_t raw_y, uint16_t* x, uint16_t* y);
-            char keypad_conversion(uint16_t px, uint16_t py);
+
+
+            // char keypad_conversion(uint16_t px, uint16_t py);
+            char keypad_conversion(uint16_t px, uint16_t py, bool config_mode);
     };
 }

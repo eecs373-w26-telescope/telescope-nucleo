@@ -2,6 +2,7 @@
 #include "main.h"
 #include <cstdint>
 #include "stdlib.h"
+#include <astro/inc/units.hpp>
 
 namespace telescope {
     class Touchscreen{
@@ -40,6 +41,15 @@ namespace telescope {
             int get_selected_messier_id();
             const char* get_display();
 
+            // =========================
+            bool in_config_mode() const; // whether in config mode or not
+            void draw_config_screen();
+
+            Telescope get_telescope_config() const;
+            void set_telescope_config(const Telescope& cfg);
+            bool consume_config_saved(Telescope* out);
+
+
         private:
             SPI_HandleTypeDef* hspi_ = nullptr;
             GPIO_TypeDef* cs_port_ = nullptr;
@@ -62,6 +72,26 @@ namespace telescope {
             bool search_ = false;
             bool main_ = false;
 
+            // ===== 新增：screen mode =====
+            enum class ScreenMode {
+                MAIN,
+                CONFIG
+            };
+            ScreenMode screen_mode_ = ScreenMode::MAIN;
+
+            // ===== 新增：telescope config =====
+            float objective_lens_diameter_ = 70.0f;
+            float eyepiece_focal_length_ = 20.0f;
+            float telescope_focal_length_ = 400.0f;
+            float eyepiece_apparent_fov_deg_ = 50.0f;
+
+            static constexpr int CONFIG_FIELD_COUNT = 4; // we need 4 config inputs
+            int config_field_index_ = 0; // 0 -> objective_lens_diameter, 1 -> eyepiece_focal_length, 2 -> telescope_focal_length, 3 -> eyepiece_apparent_fov_deg
+            char config_display_[20]{}; // user input for each value
+            int config_length_ = 0; // length of config_display_[]
+            bool config_saved_ = false; // is the setting saved
+            // =====================
+
             void cs_low();
             void cs_high();
 
@@ -80,5 +110,18 @@ namespace telescope {
             void draw_char(uint16_t x, uint16_t y, char c, uint16_t font_color, uint16_t back_color, uint16_t scale);
             void draw_string(uint16_t x, uint16_t y, const char* str, uint16_t font_color, uint16_t back_color, uint8_t scale);
             bool messier_id_exists(int target_id);
+
+            // ===== 新增：config screen helpers =====
+            void draw_config_fields();
+            void draw_config_value_box();
+            void draw_config_keypad();
+            void load_current_config_field_to_display();
+            void save_current_display_to_field();
+            void refresh_config_value_box();
+            void refresh_config_field_highlight();
+            const char* current_config_field_name() const;
+            float current_config_field_value() const;
+            void set_current_config_field_value(float v);
+            bool config_value_is_valid(float v) const;
     };
 }

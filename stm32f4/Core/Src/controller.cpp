@@ -330,9 +330,15 @@ namespace telescope {
             // Touchscreen input processing
             if(xpt.is_pressed() && (now - last_touch_tick >= TOUCH_DEBOUNCE_MS)){
                 last_touch_tick = now;
-                if(xpt.process()){
+                if(xpt.process(touchscreen.in_config_mode())){
                     char btn = xpt.get_button();
                     char action = touchscreen.update_display_string(btn);
+
+                    // =============
+                    if(touchscreen.consume_config_saved(nullptr)){
+                    }
+                    // ===============
+
                     if(touchscreen.get_search_status()){
                         if(action == 'C'){
                             touchscreen.gocancel();
