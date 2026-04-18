@@ -35,6 +35,7 @@ namespace telescope {
             void normal_process(char action, char button);
 
             void tick(uint32_t now);
+            void update_calib_indicator(uint8_t cal);
             bool get_search_status(); // returns whether in searching mode
             bool get_main(); // returns whether touchscreen is on the main screen
             bool get_view_status(); // returns whether general DSO identification is on/off

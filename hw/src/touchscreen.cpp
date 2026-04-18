@@ -42,13 +42,20 @@ static constexpr uint16_t DISPLAY_BOX_Y = 10;
 static constexpr uint16_t DISPLAY_BOX_W = OPS_X - DISPLAY_BOX_X;
 static constexpr uint16_t DISPLAY_BOX_H = 40;
 
-static constexpr uint16_t COLOR_RED      = 0xF800;
-static constexpr uint16_t COLOR_BG       = 0x0000;
-static constexpr uint16_t COLOR_BAR      = 0x1800;
-static constexpr uint16_t COLOR_INPUT    = 0x9000;
+static constexpr uint16_t COLOR_RED       = 0xF800;
+static constexpr uint16_t COLOR_BG        = 0x0000;
+static constexpr uint16_t COLOR_BAR       = 0x1800;
+static constexpr uint16_t COLOR_INPUT     = 0x9000;
 static constexpr uint16_t COLOR_BTNBORDER = 0x5000;
-static constexpr uint16_t COLOR_BTNBG    = 0x8000;
+static constexpr uint16_t COLOR_BTNBG     = 0x8000;
 static constexpr uint16_t COLOR_BRIGHTRED = 0xB800;
+static constexpr uint16_t COLOR_CALIB_OFF = 0x2000;
+static constexpr uint16_t COLOR_CALIB_ON  = 0x07E0;
+
+static constexpr uint16_t CALIB_IND_X = 10;
+static constexpr uint16_t CALIB_IND_Y = 52;
+static constexpr uint16_t CALIB_IND_W = 50;
+static constexpr uint16_t CALIB_IND_H = 6;
 
 static const uint8_t Numberbitmap[10][5] = {
     {0x3E, 0x51, 0x49, 0x45, 0x3E}, // 0
@@ -359,6 +366,12 @@ namespace telescope{
         draw_rect(DISPLAY_BOX_X, DISPLAY_BOX_Y, DISPLAY_BOX_W, DISPLAY_BOX_H, COLOR_BTNBORDER);
 
         view_change();
+        update_calib_indicator(0);
+    }
+
+    void Touchscreen::update_calib_indicator(uint8_t cal){
+        uint16_t color = (cal == 0xFF) ? COLOR_CALIB_ON : COLOR_CALIB_OFF;
+        fill_rect(CALIB_IND_X, CALIB_IND_Y, CALIB_IND_W, CALIB_IND_H, color);
     }
 
     void Touchscreen::draw_number(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t fill_color, uint16_t border_color, const char* label, uint16_t txt_color, uint16_t txt_scale){

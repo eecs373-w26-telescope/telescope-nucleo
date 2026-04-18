@@ -150,8 +150,11 @@ namespace telescope {
     float filtered_imu_heading_deg = 0.0f;
     uint16_t filtered_yaw_raw   = 0;
     uint16_t filtered_pitch_raw = 0;
+    constexpr uint32_t CALIB_SAVE_INTERVAL_MS = 60000;
+
     uint32_t last_imu_tick = 0;
     uint32_t last_gps_tick = 0;
+    uint32_t last_calib_save_tick = 0;
     uint32_t last_ping_tick = 0;
     uint32_t last_encoder_tick = 0;
     uint32_t last_serial_tick = 0;
@@ -243,16 +246,11 @@ namespace telescope {
                     filtered_imu_heading_deg = static_cast<float>(payload.heading) / 16.0f;
                     raspi.send_imu(payload);
 
-                    static bool calib_saved = false;
-                    static uint8_t mag_stable_count = 0;
-                    if (!calib_saved) {
-                        if ((payload.calibration & 0x03) == 0x03) {
-                            if (++mag_stable_count >= 10) {
-                                calib_saved = imu.save_calibration();
-                            }
-                        } else {
-                            mag_stable_count = 0;
-                        }
+                    touchscreen.update_calib_indicator(payload.calibration);
+                    if (payload.calibration == 0xFF &&
+                            now - last_calib_save_tick >= CALIB_SAVE_INTERVAL_MS) {
+                        last_calib_save_tick = now;
+                        imu.save_calibration();
                     }
                 }
             }
