@@ -4,51 +4,8 @@
 #include <cstdint>
 #include <cstring>
 #include <cstdlib>
-
-
-static constexpr uint16_t LCD_W = 480;
-static constexpr uint16_t LCD_H = 320;
-
-static constexpr uint16_t TOP_BAR_H = 60;
-static constexpr uint16_t OPS_W = 140;
-static constexpr uint16_t KEYPAD_W = LCD_W - OPS_W;
-static constexpr uint16_t CONTENT_Y = TOP_BAR_H;
-static constexpr uint16_t CONTENT_H = LCD_H - TOP_BAR_H;
-
-static constexpr uint16_t GAP = 10;
-
-static constexpr uint16_t KEY_COLS = 3;
-static constexpr uint16_t KEY_ROWS = 4;
-
-static constexpr uint16_t KEY_W = (KEYPAD_W - GAP * (KEY_COLS+1)) / KEY_COLS;
-static constexpr uint16_t KEY_H = (CONTENT_H - GAP * (KEY_ROWS+1)) / KEY_ROWS;
-
-static constexpr uint16_t OPS_X = KEYPAD_W;
-static constexpr uint16_t OPS_BTN_W = OPS_W - 2 * GAP;
-static constexpr uint16_t OPS_BTN_H = (CONTENT_H - 4 * GAP)/3;
-
-static constexpr uint16_t M_BOX_X = 10;
-static constexpr uint16_t M_BOX_Y = 10;
-static constexpr uint16_t M_BOX_W = 50;
-static constexpr uint16_t M_BOX_H = 40;
-
-static constexpr uint16_t DSO_VIEW_BOX_W = 160;
-static constexpr uint16_t DSO_VIEW_BOX_X = 360;
-static constexpr uint16_t DSO_VIEW_BOX_H = 40;
-static constexpr uint16_t DSO_VIEW_BOX_Y = 10;
-
-static constexpr uint16_t DISPLAY_BOX_X = 70;
-static constexpr uint16_t DISPLAY_BOX_Y = 10;
-static constexpr uint16_t DISPLAY_BOX_W = OPS_X - DISPLAY_BOX_X;
-static constexpr uint16_t DISPLAY_BOX_H = 40;
-
-static constexpr uint16_t COLOR_RED      = 0xF800;
-static constexpr uint16_t COLOR_BG       = 0x0000;
-static constexpr uint16_t COLOR_BAR      = 0x1800;
-static constexpr uint16_t COLOR_INPUT    = 0x9000;
-static constexpr uint16_t COLOR_BTNBORDER = 0x5000;
-static constexpr uint16_t COLOR_BTNBG    = 0x8000;
-static constexpr uint16_t COLOR_BRIGHTRED = 0xB800;
+#include <astro/inc/ngc_catalogue.hpp>
+#include <hw/inc/display.hpp>
 
 static const uint8_t Numberbitmap[10][5] = {
     {0x3E, 0x51, 0x49, 0x45, 0x3E}, // 0
@@ -79,6 +36,7 @@ static constexpr int MESSIER_IDS[] = {
 
 
 namespace telescope{
+    
     Touchscreen::Touchscreen(
                 SPI_HandleTypeDef* hspi,
                 GPIO_TypeDef* cs_port,
@@ -303,25 +261,32 @@ namespace telescope{
             case '8': memcpy(out, Numberbitmap[8], 5); return true;
             case '9': memcpy(out, Numberbitmap[9], 5); return true;
 
-            case 'M': { uint8_t t[5] = {0x7F, 0x04, 0x18, 0x04, 0x7F}; memcpy(out,t,5); return true; }
+            case 'A': { uint8_t t[5] = {0x7E, 0x11, 0x11, 0x11, 0x7E}; memcpy(out,t,5); return true; }
             case 'B': { uint8_t t[5] = {0x7F, 0x49, 0x49, 0x49, 0x36}; memcpy(out,t,5); return true; }
-            case 'S': { uint8_t t[5] = {0x26, 0x49, 0x49, 0x49, 0x32}; memcpy(out,t,5); return true; }
             case 'C': { uint8_t t[5] = {0x3E, 0x41, 0x41, 0x41, 0x22}; memcpy(out,t,5); return true; }
-            case 'L': { uint8_t t[5] = {0x7F, 0x40, 0x40, 0x40, 0x40}; memcpy(out,t,5); return true; }
-            case 'R': { uint8_t t[5] = {0x7F, 0x09, 0x19, 0x29, 0x46}; memcpy(out,t,5); return true; }
+            case 'D': { uint8_t t[5] = {0x7F, 0x41, 0x41, 0x22, 0x1C}; memcpy(out,t,5); return true; }
             case 'E': { uint8_t t[5] = {0x7F, 0x49, 0x49, 0x49, 0x41}; memcpy(out,t,5); return true; }
-            case 'N': { uint8_t t[5] = {0x7F, 0x02, 0x0C, 0x10, 0x7F}; memcpy(out,t,5); return true; }
-            case 'T': { uint8_t t[5] = {0x01, 0x01, 0x7F, 0x01, 0x01}; memcpy(out,t,5); return true; }
-            case 'A': { uint8_t t[5] = {0x7E, 0x09, 0x09, 0x09, 0x7E}; memcpy(out,t,5); return true; }
-            case 'K': { uint8_t t[5] = {0x7F, 0x08, 0x14, 0x22, 0x41}; memcpy(out,t,5); return true; }
-            case 'Y': { uint8_t t[5] = {0x07, 0x08, 0x70, 0x08, 0x07}; memcpy(out,t,5); return true; }
+            case 'F': { uint8_t t[5] = {0x7F, 0x09, 0x09, 0x09, 0x01}; memcpy(out,t,5); return true; }
             case 'G': { uint8_t t[5] = {0x3E, 0x41, 0x49, 0x49, 0x7A}; memcpy(out,t,5); return true; }
             case 'H': { uint8_t t[5] = {0x7F, 0x08, 0x08, 0x08, 0x7F}; memcpy(out,t,5); return true; }
-            case 'F': { uint8_t t[5] = {0x7F, 0x09, 0x09, 0x09, 0x01}; memcpy(out,t,5); return true; }
-            case 'X': { uint8_t t[5] = {0x63, 0x14, 0x08, 0x14, 0x63}; memcpy(out,t,5); return true; }
             case 'I': { uint8_t t[5] = {0x00, 0x41, 0x7F, 0x41, 0x00}; memcpy(out,t,5); return true; }
-            case 'D': { uint8_t t[5] = {0x7F, 0x41, 0x41, 0x22, 0x1C}; memcpy(out,t,5); return true; }
+            case 'J': { uint8_t t[5] = {0x20, 0x40, 0x41, 0x3F, 0x01}; memcpy(out,t,5); return true; }
+            case 'K': { uint8_t t[5] = {0x7F, 0x08, 0x14, 0x22, 0x41}; memcpy(out,t,5); return true; }
+            case 'L': { uint8_t t[5] = {0x7F, 0x40, 0x40, 0x40, 0x40}; memcpy(out,t,5); return true; }
+            case 'M': { uint8_t t[5] = {0x7F, 0x02, 0x0C, 0x02, 0x7F}; memcpy(out,t,5); return true; }
+            case 'N': { uint8_t t[5] = {0x7F, 0x04, 0x08, 0x10, 0x7F}; memcpy(out,t,5); return true; }
             case 'O': { uint8_t t[5] = {0x3E, 0x41, 0x41, 0x41, 0x3E}; memcpy(out,t,5); return true; }
+            case 'P': { uint8_t t[5] = {0x7F, 0x09, 0x09, 0x09, 0x06}; memcpy(out,t,5); return true; }
+            case 'Q': { uint8_t t[5] = {0x3E, 0x41, 0x51, 0x21, 0x5E}; memcpy(out,t,5); return true; }
+            case 'R': { uint8_t t[5] = {0x7F, 0x09, 0x19, 0x29, 0x46}; memcpy(out,t,5); return true; }
+            case 'S': { uint8_t t[5] = {0x46, 0x49, 0x49, 0x49, 0x31}; memcpy(out,t,5); return true; }
+            case 'T': { uint8_t t[5] = {0x01, 0x01, 0x7F, 0x01, 0x01}; memcpy(out,t,5); return true; }
+            case 'U': { uint8_t t[5] = {0x3F, 0x40, 0x40, 0x40, 0x3F}; memcpy(out,t,5); return true; }
+            case 'V': { uint8_t t[5] = {0x1F, 0x20, 0x40, 0x20, 0x1F}; memcpy(out,t,5); return true; }
+            case 'W': { uint8_t t[5] = {0x7F, 0x20, 0x18, 0x20, 0x7F}; memcpy(out,t,5); return true; }
+            case 'X': { uint8_t t[5] = {0x63, 0x14, 0x08, 0x14, 0x63}; memcpy(out,t,5); return true; }
+            case 'Y': { uint8_t t[5] = {0x07, 0x08, 0x70, 0x08, 0x07}; memcpy(out,t,5); return true; }
+            case 'Z': { uint8_t t[5] = {0x61, 0x51, 0x49, 0x45, 0x43}; memcpy(out,t,5); return true; }
             case '!': { uint8_t t[5] = {0x00, 0x00, 0x5F, 0x00, 0x00}; memcpy(out,t,5); return true; }
             case ':': { uint8_t t[5] = {0x00, 0x36, 0x36, 0x00, 0x00}; memcpy(out,t,5); return true; }
 
@@ -353,12 +318,22 @@ namespace telescope{
 
     void Touchscreen::draw_top_bar(){
         fill_rect(0, 0, LCD_W, TOP_BAR_H, COLOR_BAR);
-        draw_string(M_BOX_X + 13, M_BOX_Y + 6, "M", COLOR_BRIGHTRED, COLOR_BAR, 4);
+        // draw_string(M_BOX_X + 13, M_BOX_Y + 6, "M", COLOR_BRIGHTRED, COLOR_BAR, 4);
+        draw_catalogue_selector();
 
         fill_rect(DISPLAY_BOX_X, DISPLAY_BOX_Y, DISPLAY_BOX_W, DISPLAY_BOX_H, COLOR_BAR);
         draw_rect(DISPLAY_BOX_X, DISPLAY_BOX_Y, DISPLAY_BOX_W, DISPLAY_BOX_H, COLOR_BTNBORDER);
 
         view_change();
+    }
+    void Touchscreen::draw_catalogue_selector(){
+        uint16_t m_fill = (selected_catalogue_ == CatalogueType::Messier) ? COLOR_BRIGHTRED : COLOR_BTNBG;
+        uint16_t m_text = (selected_catalogue_ == CatalogueType::Messier) ? COLOR_BG : COLOR_BRIGHTRED;
+
+        uint16_t NGC_fill = (selected_catalogue_ == CatalogueType::NGC) ? COLOR_BRIGHTRED : COLOR_BTNBG;
+        uint16_t NGC_text = (selected_catalogue_ == CatalogueType::NGC) ? COLOR_BG : COLOR_BRIGHTRED;
+        draw_number(M_BOX_X, M_BOX_Y, M_BTN_W, CAT_BTN_H, m_fill, COLOR_BTNBORDER, "M", m_text,3);
+        draw_number(NGC_BOX_X, M_BOX_Y, NGC_BTN_W, CAT_BTN_H, NGC_fill, COLOR_BTNBORDER, "NGC", NGC_text, 3);
     }
 
     void Touchscreen::draw_number(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t fill_color, uint16_t border_color, const char* label, uint16_t txt_color, uint16_t txt_scale){
@@ -419,14 +394,46 @@ namespace telescope{
         return false;
     }
 
+    bool Touchscreen::NGC_id_exists(int target_id){
+        for(std::size_t i = 0; i < NGC_SUBSET_COUNT; ++i){
+            if(NGC_SUBSET[i].id == target_id){
+                return NGC_SUBSET[i].mag <= NGC_MAG_CUTOFF;
+            }
+        }
+        return false;
+    }
+    bool Touchscreen::selected_id_exists(){
+        int target_id = std::atoi(display_);
+        if(selected_catalogue_ == CatalogueType::Messier){
+            return messier_id_exists(target_id);
+        }
+        return NGC_id_exists(target_id);
+    }
     void Touchscreen::input_display(const char* text){
         fill_rect(DISPLAY_BOX_X + 2, DISPLAY_BOX_Y + 2, DISPLAY_BOX_W - 4, DISPLAY_BOX_H - 4, COLOR_BAR);
         draw_rect(DISPLAY_BOX_X, DISPLAY_BOX_Y, DISPLAY_BOX_W, DISPLAY_BOX_H, COLOR_BTNBORDER);
         draw_string(DISPLAY_BOX_X + 8, DISPLAY_BOX_Y + 8, text, COLOR_BRIGHTRED, COLOR_BAR, 3);
     }
+    void Touchscreen::select_catalogue(CatalogueType cat){
+        if(selected_catalogue_ == cat) return;
+        selected_catalogue_ = cat;
+        display_[0] = '\0';
+        length_ = 0;
+        enter_ = 0;
+        input_display("");
+        draw_catalogue_selector();
+    }
 
     char Touchscreen::update_display_string(char c){
-        if(c == 'B'){
+        if(c == 'M'){
+            select_catalogue(CatalogueType::Messier);
+            return 'M';
+        }
+        else if(c == 'G'){
+            select_catalogue(CatalogueType::NGC);
+            return 'G';
+        }
+        else if(c == 'B'){
             if(length_ == 0) return 'B';
             length_--;
             display_[length_] = '\0';
@@ -448,7 +455,8 @@ namespace telescope{
                 error();
                 return 'E';
             }
-            if(!messier_id_exists(std::atoi(display_))){
+            
+            if(!selected_id_exists()){
                 error();
             }
             else{
@@ -465,7 +473,7 @@ namespace telescope{
         }
         else{
             if(c != ' '){
-                if(length_ >= 3){
+                if(length_ >= max_input_length()){
                     error();
                     return 'U';
                 }
@@ -521,6 +529,9 @@ namespace telescope{
         draw_string(120, 160, line2, COLOR_BRIGHTRED, COLOR_BG, 3);
         draw_string(120, 240, line3, COLOR_BRIGHTRED, COLOR_BG, 3);
     }
+    int Touchscreen::max_input_length() const{
+        return (selected_catalogue_ == CatalogueType::Messier) ? 3:4;
+    }
 
     void Touchscreen::error(){
         popup("ERROR", "DSO NOT EXIST", "TRY AGAIN");
@@ -547,8 +558,9 @@ namespace telescope{
 
     void Touchscreen::gosearch(){
         search_id_ = std::atoi(display_);
-        char output[8];
-        snprintf(output, sizeof(output), "M%s", display_);
+        char output[12];
+        const char* prefix = (selected_catalogue_ == CatalogueType::Messier) ? "M" : "NGC";
+        snprintf(output, sizeof(output), "%s%s", prefix, display_);
         enter_  = 0;
         search_ = 1;
         popup("SEARCHING:", output, "");
@@ -573,6 +585,14 @@ namespace telescope{
         }
     }
 
+    void Touchscreen::normal_process(char action, char button){
+        // if(length_ >= 4){
+        //     error();
+        // }
+        if(action == 'N'){
+            display_new_character(button);
+        }
+    }
     bool Touchscreen::get_search_status(){
         return search_;
     }
@@ -586,18 +606,14 @@ namespace telescope{
     int Touchscreen::get_selected_messier_id() {
         return std::atoi(display_);
     }
+    CatalogueType Touchscreen::get_selected_catalogue(){
+        return selected_catalogue_;
+    }
 
     const char* Touchscreen::get_display(){
         return display_;
     }
 
-    void Touchscreen::normal_process(char action, char button){
-        // if(length_ >= 4){
-        //     error();
-        // }
-        if(action == 'N'){
-            display_new_character(button);
-        }
-    }
+    
 
 } // namespace telescope
