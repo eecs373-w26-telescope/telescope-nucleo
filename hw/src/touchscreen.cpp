@@ -1,10 +1,12 @@
 #include <hw/inc/touchscreen.hpp>
 #include <hw/inc/spi_mode.hpp>
 #include <hw/inc/display.hpp>
+#include <astro/inc/ngc_catalogue.hpp>
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
 #include <cstdlib>
+#include <vector>
 
 
 static const uint8_t Numberbitmap[10][5] = {
@@ -33,22 +35,14 @@ static constexpr int MESSIER_IDS[] = {
     84, 65, 105, 72, 100, 90, 88, 61, 95, 59,
     58, 89, 109, 99, 108, 73, 98, 91, 97, 76
 };
-static constexpr NGCEntry NGC_SUBSET[] = {
-    {253, 7.1f},
-    {457, 6.4f},
-    {869, 5.3f},
-    {884, 6.1f},
-    {1499, 6.0f},
-    {1976, 4.0f},
-    {2244, 4.8f},
-    {2264, 3.9f},
-    {7000, 4.0f},
-    {7293, 7.6f}
-};
+
 struct NGCEntry {
         int id;
         float mag;
+        std::string ra;
+        std::string decl;
     };
+static std::vector<NGCEntry> g_ngc_subset;
 static constexpr float NGC_MAG_CUTOFF = 9.5f;
 
 namespace telescope{
@@ -297,6 +291,7 @@ namespace telescope{
             case 'O': { uint8_t t[5] = {0x3E, 0x41, 0x41, 0x41, 0x3E}; memcpy(out,t,5); return true; }
             case '!': { uint8_t t[5] = {0x00, 0x00, 0x5F, 0x00, 0x00}; memcpy(out,t,5); return true; }
             case ':': { uint8_t t[5] = {0x00, 0x36, 0x36, 0x00, 0x00}; memcpy(out,t,5); return true; }
+            case '.': { uint8_t t[5] = {0x00, 0x60, 0x60, 0x00, 0x00}; memcpy(out,t,5); return true; }
 
             default: return false;
         }
@@ -326,13 +321,22 @@ namespace telescope{
 
     void Touchscreen::draw_top_bar(){
         fill_rect(0, 0, LCD_W, TOP_BAR_H, COLOR_BAR);
-        draw_catalogue_selector();
-        //draw_string(M_BOX_X + 13, M_BOX_Y + 6, "M", COLOR_BRIGHTRED, COLOR_BAR, 4);
+        if(screen_mode_ == ScreenMode::MAIN){
+            draw_catalogue_selector();
+            //draw_string(M_BOX_X + 13, M_BOX_Y + 6, "M", COLOR_BRIGHTRED, COLOR_BAR, 4);
 
-        fill_rect(DISPLAY_BOX_X, DISPLAY_BOX_Y, DISPLAY_BOX_W, DISPLAY_BOX_H, COLOR_BAR);
-        draw_rect(DISPLAY_BOX_X, DISPLAY_BOX_Y, DISPLAY_BOX_W, DISPLAY_BOX_H, COLOR_BTNBORDER);
+            fill_rect(DISPLAY_BOX_X, DISPLAY_BOX_Y, DISPLAY_BOX_W, DISPLAY_BOX_H, COLOR_BAR);
+            draw_rect(DISPLAY_BOX_X, DISPLAY_BOX_Y, DISPLAY_BOX_W, DISPLAY_BOX_H, COLOR_BTNBORDER);
 
-        view_change();
+            view_change();
+        }
+        else{
+            draw_string(M_BOX_X + 4, M_BOX_Y + 10, "CFG", COLOR_BRIGHTRED, COLOR_BAR, 3);
+            fill_rect(DISPLAY_BOX_X, DISPLAY_BOX_Y, DISPLAY_BOX_W, DISPLAY_BOX_H, COLOR_BTNBG);
+            draw_rect(DISPLAY_BOX_X, DISPLAY_BOX_Y, DISPLAY_BOX_W, DISPLAY_BOX_H, COLOR_BTNBORDER);
+            draw_string(DISPLAY_BOX_X + 18, DISPLAY_BOX_Y + 10, "MAIN", COLOR_BRIGHTRED, COLOR_BTNBG, 2);
+        }
+        
     }
     void Touchscreen::draw_catalogue_selector(){
         uint16_t m_fill = (selected_catalogue_ == CatalogueType::Messier) ? COLOR_BRIGHTRED : COLOR_BTNBG;
@@ -357,11 +361,15 @@ namespace telescope{
     }
 
     void Touchscreen::draw_keypad(){
+        if(screen_mode_ == ScreenMode::CONFIG){
+            draw_config_keypad();
+            return;
+        }
         static const char* keys[4][3] = {
             {"1", "2", "3"},
             {"4", "5", "6"},
             {"7", "8", "9"},
-            {" ", "0", " "}
+            {"CFG", "0", " "}
         };
 
         for(uint16_t r = 0; r < KEY_ROWS; r++){
@@ -379,8 +387,28 @@ namespace telescope{
         }
     }
 
+     void Touchscreen::draw_config_keypad(){
+        static const char* keys[4][3] = {
+            {"1", "2", "3"},
+            {"4", "5", "6"},
+            {"7", "8", "9"},
+            {".", "0", "NEXT"}
+        };
+
+        for(uint16_t r = 0; r < KEY_ROWS; r++){
+            for(uint16_t c = 0; c < KEY_COLS; c++){
+                uint16_t x = GAP + c * (KEY_W + GAP);
+                uint16_t y = CONTENT_Y + GAP + r * (KEY_H + GAP);
+
+                draw_number(x, y, KEY_W, KEY_H, COLOR_BTNBG, COLOR_BTNBORDER, keys[r][c], COLOR_BRIGHTRED, 4);
+            }
+        }
+    }
+
     void Touchscreen::draw_op(){
-        const char* labels[3] = {"BACK", "CLEAR", "ENTER"};
+        const char* labels_main[3]   = {"BACK", "CLEAR", "ENTER"};
+        const char* labels_config[3] = {"BACK", "CLEAR", "SAVE"};
+        const char** labels = (screen_mode_ == ScreenMode::CONFIG) ? labels_config : labels_main;
         uint16_t fills[3] = {COLOR_BTNBG, COLOR_BTNBG, COLOR_BTNBG};
 
         for(uint16_t i = 0; i < 3; i++){
@@ -400,17 +428,19 @@ namespace telescope{
         }
         return false;
     }
-    static constexpr std::size_t NGC_SUBSET_COUNT = sizeof(NGC_SUBSET) / sizeof(NGC_SUBSET[0]);
+    
     
     bool Touchscreen::NGC_id_exists(int target_id){
-        for(std::size_t i = 0; i < NGC_SUBSET_COUNT; ++i ){
+        for(std::size_t i = 0; i < NGC_SUBSET_COUNT; i++){
             if(NGC_SUBSET[i].id == target_id){
                 return NGC_SUBSET[i].mag <= NGC_MAG_CUTOFF;
             }
         }
         return false;
     }
+
     void Touchscreen::input_display(const char* text){
+        if(screen_mode_ == ScreenMode::CONFIG) return;
         fill_rect(DISPLAY_BOX_X + 2, DISPLAY_BOX_Y + 2, DISPLAY_BOX_W - 4, DISPLAY_BOX_H - 4, COLOR_BAR);
         draw_rect(DISPLAY_BOX_X, DISPLAY_BOX_Y, DISPLAY_BOX_W, DISPLAY_BOX_H, COLOR_BTNBORDER);
         draw_string(DISPLAY_BOX_X + 8, DISPLAY_BOX_Y + 8, text, COLOR_BRIGHTRED, COLOR_BAR, 3);
@@ -426,7 +456,96 @@ namespace telescope{
     }
 
     char Touchscreen::update_display_string(char c){
-        if(c == 'M'){
+        if(screen_mode_ == ScreenMode::CONFIG){
+            if(c == 'M'){
+                
+                draw_main();
+                return 'M';
+            }
+            else if(c == 'B'){
+                if(config_length_ == 0) return 'B';
+                config_length_--;
+                config_display_[config_length_] = '\0';
+                refresh_config_value_box();
+                return 'B';
+            }
+            else if(c == 'C'){
+                config_length_ = 0;
+                config_display_[0] = '\0';
+                refresh_config_value_box();
+                return 'C';
+            }
+            else if(c == 'N'){
+                if(config_length_ > 0){
+                    float v = std::strtof(config_display_, nullptr);
+                    if(!config_value_is_valid(v)){
+                        popup("ERROR", "INVALID VALUE", "TRY AGAIN");
+                        HAL_Delay(500);
+                        draw_config_screen();
+                        return 'U';
+                    }
+                    set_current_config_field_value(v);
+                }
+
+                config_field_index_ = (config_field_index_ + 1) % CONFIG_FIELD_COUNT;
+                load_current_config_field_to_display();
+                refresh_config_field_highlight();
+                refresh_config_value_box();
+                return 'N';
+            }
+            else if(c == 'S'){
+                if(config_length_ > 0){
+                    float v = std::strtof(config_display_, nullptr);
+                    if(!config_value_is_valid(v)){
+                        popup("ERROR", "INVALID VALUE", "TRY AGAIN");
+                        HAL_Delay(500);
+                        draw_config_screen();
+                        return 'U';
+                    }
+                    set_current_config_field_value(v);
+                }
+
+                config_saved_ = true;
+                popup("SAVED", "", "");
+                HAL_Delay(300);
+                draw_main();
+                return 'S';
+            }
+            else if(c == '.'){
+                if(std::strchr(config_display_, '.') != nullptr){
+                    return 'U';
+                }
+                if(config_length_ >= (int)sizeof(config_display_) - 1){
+                    return 'U';
+                }
+
+                if(config_length_ == 0){
+                    config_display_[config_length_++] = '0';
+                }
+                config_display_[config_length_++] = '.';
+                config_display_[config_length_] = '\0';
+                refresh_config_value_box();
+                return '.';
+            }
+            else if(c >= '0' && c <= '9'){
+                if(config_length_ >= (int)sizeof(config_display_) - 1){
+                    return 'U';
+                }
+                config_display_[config_length_++] = c;
+                config_display_[config_length_] = '\0';
+                refresh_config_value_box();
+                return 'N';
+            }
+
+            return 'U';
+        }
+        if(c == 'T'){
+            config_field_index_ = 0;
+            load_current_config_field_to_display();
+            draw_config_screen();
+            return 'T';
+        }
+        else if(c == 'M'){
             select_catalogue(CatalogueType::Messier);
             return 'M';
         }
@@ -482,15 +601,18 @@ namespace telescope{
             }
         }
         return 'U';
+        
     }
 
     void Touchscreen::display_new_character(char button){
+        if(screen_mode_ == ScreenMode::CONFIG) return;
         uint16_t x = DISPLAY_BOX_X + 8 + (length_ - 1) * 6 * 3;
         uint16_t y = DISPLAY_BOX_Y + 8;
         draw_char(x, y, button, COLOR_BRIGHTRED, COLOR_BAR, 3);
     }
 
     void Touchscreen::draw_main(){
+        screen_mode_ = ScreenMode::MAIN;
         fill_screen(COLOR_BG);
 
         draw_top_bar();
@@ -506,21 +628,6 @@ namespace telescope{
         display_[0] = '\0';
     }
 
-    void Touchscreen::draw_popup(const char* line1, const char* line2, const char* line3){
-        const uint16_t POPUP_W = 300;
-        const uint16_t POPUP_H = 140;
-
-        const uint16_t popup_x = (LCD_W - POPUP_W) / 2;
-        const uint16_t popup_y = (LCD_H - POPUP_H) / 2;
-
-        fill_rect(popup_x, popup_y, POPUP_W, POPUP_H, COLOR_BG);
-        draw_rect(popup_x, popup_y, POPUP_W, POPUP_H, COLOR_BRIGHTRED);
-        draw_rect(popup_x + 2, popup_y + 2, POPUP_W - 4, POPUP_H - 4, COLOR_BRIGHTRED);
-
-        draw_string(popup_x + 20, popup_y + 20, line1, COLOR_BRIGHTRED, COLOR_BG, 2);
-        draw_string(popup_x + 20, popup_y + 50, line2, COLOR_BRIGHTRED, COLOR_BG, 2);
-        draw_string(popup_x + 20, popup_y + 80, line3, COLOR_BRIGHTRED, COLOR_BG, 2);
-    }
 
     void Touchscreen::popup(const char* line1, const char* line2, const char* line3){
         fill_screen(COLOR_BG);
@@ -558,6 +665,7 @@ namespace telescope{
     }
 
     void Touchscreen::view_change(){
+         if(screen_mode_ != ScreenMode::MAIN) return;
         fill_rect(OPS_X + GAP, DSO_VIEW_BOX_Y, OPS_BTN_W, DSO_VIEW_BOX_H, COLOR_BTNBG);
         if(view_){
             draw_string(OPS_X + GAP + 15, DSO_VIEW_BOX_Y + 10, "ON ", COLOR_BRIGHTRED, COLOR_BTNBG, 3);
@@ -574,7 +682,170 @@ namespace telescope{
             display_new_character(button);
         }
     }
+    //Config Parts
+     void Touchscreen::draw_config_screen(){
+        screen_mode_ = ScreenMode::CONFIG;
+        main_ = false;
+        search_ = false;
+        enter_ = false;
 
+        load_current_config_field_to_display();
+
+        fill_screen(COLOR_BG);
+        draw_top_bar();
+        draw_config_fields();
+        draw_config_value_box();
+        draw_keypad();
+        draw_op();
+    }
+     const char* Touchscreen::current_config_field_name() const{
+        switch(config_field_index_){
+            case 0: return "OBJ DIA (MM)";
+            case 1: return "EYE F (MM)";
+            case 2: return "SCOPE F (MM)";
+            case 3: return "AFOV (DEG)";
+            default: return "";
+        }
+    }
+    float Touchscreen::current_config_field_value() const{
+        switch(config_field_index_){
+            case 0: return objective_lens_diameter_;
+            case 1: return eyepiece_focal_length_;
+            case 2: return telescope_focal_length_;
+            case 3: return eyepiece_apparent_fov_deg_;
+            default: return 0.0f;
+        }
+    }
+    void Touchscreen::set_current_config_field_value(float v){
+        switch(config_field_index_){
+            case 0: objective_lens_diameter_ = v; break;
+            case 1: eyepiece_focal_length_ = v; break;
+            case 2: telescope_focal_length_ = v; break;
+            case 3: eyepiece_apparent_fov_deg_ = v; break;
+            default: break;
+        }
+    }
+
+    bool Touchscreen::config_value_is_valid(float v) const{
+        return v > 0.0f;
+    }
+
+    void Touchscreen::load_current_config_field_to_display(){
+        float v = current_config_field_value();
+        snprintf(config_display_, sizeof(config_display_), "%.1f", v);
+        config_length_ = std::strlen(config_display_);
+    }
+
+    void Touchscreen::save_current_display_to_field(){
+        if(config_length_ == 0) return;
+
+        float v = std::strtof(config_display_, nullptr);
+        if(!config_value_is_valid(v)) return;
+
+        set_current_config_field_value(v);
+    }
+
+    void Touchscreen::draw_config_fields(){
+        const uint16_t start_x = 12;
+        const uint16_t start_y = 72;
+        const uint16_t row_h   = 28;
+
+        const char* labels[4] = {
+            "OBJ DIA (MM)",
+            "EYE F (MM)",
+            "SCOPE F (MM)",
+            "AFOV (DEG)"
+        };
+
+        char value_buf[20];
+
+        for(int i = 0; i < 4; i++){
+            uint16_t y = start_y + i * row_h;
+            bool active = (i == config_field_index_);
+
+            uint16_t box_color = active ? COLOR_BTNBG : COLOR_BG;
+            fill_rect(10, y - 2, 250, 24, box_color);
+            draw_rect(10, y - 2, 250, 24, COLOR_BTNBORDER);
+
+            draw_string(18, y + 2, labels[i], COLOR_BRIGHTRED, box_color, 2);
+
+            float v = 0.0f;
+            switch(i){
+                case 0: v = objective_lens_diameter_; break;
+                case 1: v = eyepiece_focal_length_; break;
+                case 2: v = telescope_focal_length_; break;
+                case 3: v = eyepiece_apparent_fov_deg_; break;
+            }
+
+            snprintf(value_buf, sizeof(value_buf), "%.1f", v);
+            draw_string(190, y + 2, value_buf, COLOR_BRIGHTRED, box_color, 2);
+        }
+    }
+
+    void Touchscreen::draw_config_value_box(){
+        const uint16_t box_x = 270;
+        const uint16_t box_y = 72;
+        const uint16_t box_w = 195;
+        const uint16_t box_h = 110;
+
+        fill_rect(box_x, box_y, box_w, box_h, COLOR_BAR);
+        draw_rect(box_x, box_y, box_w, box_h, COLOR_BTNBORDER);
+
+        draw_string(box_x + 10, box_y + 10, current_config_field_name(), COLOR_BRIGHTRED, COLOR_BAR, 2);
+
+        fill_rect(box_x + 10, box_y + 42, box_w - 20, 50, COLOR_BTNBG);
+        draw_rect(box_x + 10, box_y + 42, box_w - 20, 50, COLOR_BTNBORDER);
+        draw_string(box_x + 18, box_y + 56, config_display_, COLOR_BRIGHTRED, COLOR_BTNBG, 3);
+    }
+
+    void Touchscreen::refresh_config_value_box(){
+        draw_config_value_box();
+    }
+
+    void Touchscreen::refresh_config_field_highlight(){
+        draw_config_fields();
+    }
+
+    // ================
+    bool Touchscreen::in_config_mode() const{
+        return screen_mode_ == ScreenMode::CONFIG;
+    }
+
+    Telescope Touchscreen::get_telescope_config() const{
+        Telescope cfg;
+        cfg.objective_lens_diameter = objective_lens_diameter_;
+        cfg.eyepiece_focal_length = eyepiece_focal_length_;
+        cfg.telescope_focal_length = telescope_focal_length_;
+        cfg.eyepiece_apparent_fov_deg = eyepiece_apparent_fov_deg_;
+        return cfg;
+    }
+
+    void Touchscreen::set_telescope_config(const Telescope& cfg){
+        objective_lens_diameter_ = cfg.objective_lens_diameter;
+        eyepiece_focal_length_ = cfg.eyepiece_focal_length;
+        telescope_focal_length_ = cfg.telescope_focal_length;
+        eyepiece_apparent_fov_deg_ = cfg.eyepiece_apparent_fov_deg;
+
+        if(screen_mode_ == ScreenMode::CONFIG){
+            load_current_config_field_to_display();
+            refresh_config_field_highlight();
+            refresh_config_value_box();
+        }
+    }
+
+    bool Touchscreen::consume_config_saved(Telescope* out){
+        if(!config_saved_) return false;
+
+        config_saved_ = false;
+
+        if(out != nullptr){
+            out->objective_lens_diameter = objective_lens_diameter_;
+            out->eyepiece_focal_length = eyepiece_focal_length_;
+            out->telescope_focal_length = telescope_focal_length_;
+            out->eyepiece_apparent_fov_deg = eyepiece_apparent_fov_deg_;
+        }
+        return true;
+    }
     bool Touchscreen::get_search_status(){
         return search_;
     }

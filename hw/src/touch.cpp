@@ -95,15 +95,23 @@ namespace telescope{
         return true;
     }
 
-    char Touch::keypad_conversion(uint16_t px, uint16_t py){
-        static const char keys[4][3] = {
+    char Touch::keypad_conversion(uint16_t px, uint16_t py, bool config_mode){
+        static const char main_keys[4][3] = {
             {'1', '2', '3'},
             {'4', '5', '6'},
             {'7', '8', '9'},
-            {' ', '0', ' '}
+            {'T', '0', ' '} // T means config mode
         };
 
-        //determines type 
+         static const char config_keys[4][3] = {
+            {'1', '2', '3'},
+            {'4', '5', '6'},
+            {'7', '8', '9'},
+            {'.', '0', 'N'}   // . means dot for float, N means NEXT
+        };
+
+        const char (*keys)[3] = config_mode ? config_keys : main_keys;
+        //determines type NGC vs Messier
         if(px >= M_BOX_X && px < M_BOX_X + M_BTN_W && py >= M_BOX_Y && py < M_BOX_Y + CAT_BTN_H){
             return 'M';
         }
@@ -122,14 +130,16 @@ namespace telescope{
 
         if(px >= OPS_X + GAP && px < OPS_X + GAP + OPS_BTN_W &&
            py >= DSO_VIEW_BOX_Y && py < DSO_VIEW_BOX_Y + DSO_VIEW_BOX_H){
-            return 'V';
+            return config_mode ? 'A': 'V';
         }
 
         for(int i = 0; i < 3; i++){
             uint16_t x = OPS_X + GAP;
             uint16_t y = CONTENT_Y + GAP + i * (OPS_BTN_H + GAP);
             if(px >= x && px < x + OPS_BTN_W && py >= y && py < y + OPS_BTN_H){
-                return (i == 0) ? 'B' : (i == 1) ? 'C' : 'E';
+                if(i == 0) return 'B';  // BACK
+                if(i == 1) return 'C';  // CLEAR
+                return config_mode ? 'S' : 'E';  // SAVE / ENTER
             }
         }
 
@@ -145,12 +155,12 @@ namespace telescope{
         printf("Cali x = %u, y = %u\r\n", x, y);
     }
 
-    bool Touch::process(){
+    bool Touch::process(bool config_mode){
         uint16_t raw_x = 0, raw_y = 0;
         uint16_t px = 0, py = 0;
         if(read_average_raw(&raw_x, &raw_y)){
             convert_px(raw_x, raw_y, &px, &py);
-            char c = keypad_conversion(px, py);
+            char c = keypad_conversion(px, py, config_mode);
             if(c == '\0') return false;
             button_ = c;
             return true;
