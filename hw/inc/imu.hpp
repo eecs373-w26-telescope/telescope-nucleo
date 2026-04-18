@@ -38,10 +38,12 @@ namespace telescope {
             uint8_t get_calibration();
             bool    calibration_loaded() const { return calib_loaded_; }
             bool    save_calibration();
+            void    set_tare();
 
         private:
             I2C_HandleTypeDef* i2c_ = nullptr;
             int16_t current_heading_ = 0;
+            int16_t tare_offset_ = 0;
             uint8_t current_calib_ = 0;
             bool    calib_loaded_ = false;
 

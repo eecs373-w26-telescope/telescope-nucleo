@@ -359,6 +359,10 @@ namespace telescope {
                         if(action == 'V'){
                             touchscreen.view_change();
                         }
+                        else if(action == 'T'){
+                            imu.set_tare();
+                            touchscreen.tare_feedback();
+                        }
                         else{
                             touchscreen.normal_process(action, btn);
                         }

@@ -38,7 +38,13 @@ namespace telescope {
     }
 
     int16_t IMU::get_heading() {
-        return current_heading_;
+        int16_t tared = current_heading_ - tare_offset_;
+        if (tared < 0) tared += 5760;
+        return tared;
+    }
+
+    void IMU::set_tare() {
+        tare_offset_ = current_heading_;
     }
 
     uint8_t IMU::get_calibration() {

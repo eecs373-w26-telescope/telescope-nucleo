@@ -40,6 +40,7 @@ namespace telescope {
             bool get_view_status(); // returns whether general DSO identification is on/off
             int get_selected_messier_id();
             const char* get_display();
+            void tare_feedback();
 
         private:
             SPI_HandleTypeDef* hspi_ = nullptr;
@@ -64,6 +65,8 @@ namespace telescope {
             bool main_ = false;
             bool error_pending_ = false;
             uint32_t error_until_tick_ = 0;
+            bool tare_feedback_pending_ = false;
+            uint32_t tare_feedback_until_tick_ = 0;
 
             void cs_low();
             void cs_high();

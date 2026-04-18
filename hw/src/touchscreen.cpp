@@ -378,7 +378,7 @@ namespace telescope{
             {"1", "2", "3"},
             {"4", "5", "6"},
             {"7", "8", "9"},
-            {" ", "0", " "}
+            {"TARE", "0", " "}
         };
 
         for(uint16_t r = 0; r < KEY_ROWS; r++){
@@ -391,7 +391,8 @@ namespace telescope{
                     continue;
                 }
 
-                draw_number(x, y, KEY_W, KEY_H, COLOR_BTNBG, COLOR_BTNBORDER, keys[r][c], COLOR_BRIGHTRED, 4);
+                uint16_t scale = (strcmp(keys[r][c], "TARE") == 0) ? 3 : 4;
+                draw_number(x, y, KEY_W, KEY_H, COLOR_BTNBG, COLOR_BTNBORDER, keys[r][c], COLOR_BRIGHTRED, scale);
             }
         }
     }
@@ -454,6 +455,9 @@ namespace telescope{
                 gosearch();
             }
             return 'E';
+        }
+        else if(c == 'T'){
+            return 'T';
         }
         else if(c == 'V'){
             view_ = !view_;
@@ -524,9 +528,19 @@ namespace telescope{
         error_until_tick_ = HAL_GetTick() + 500;
     }
 
+    void Touchscreen::tare_feedback(){
+        popup("TARE", "SET", "");
+        tare_feedback_pending_ = true;
+        tare_feedback_until_tick_ = HAL_GetTick() + 700;
+    }
+
     void Touchscreen::tick(uint32_t now){
         if(error_pending_ && now >= error_until_tick_){
             error_pending_ = false;
+            draw_main();
+        }
+        if(tare_feedback_pending_ && now >= tare_feedback_until_tick_){
+            tare_feedback_pending_ = false;
             draw_main();
         }
     }
