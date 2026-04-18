@@ -297,6 +297,7 @@ void Astronomy::project_gnomonic_local(const EquatorialCoordinates& center,
     const double x_rot =  x_eq * std::cos(q) + y_eq * std::sin(q);
     const double y_rot = -x_eq * std::sin(q) + y_eq * std::cos(q);
 
-    x_out = static_cast<float>(x_rot);
-    y_out = static_cast<float>(y_rot);
+    // extra 90 deg screen rotation
+    x_out = static_cast<float>( y_rot);
+    y_out = static_cast<float>(-x_rot);
 }
