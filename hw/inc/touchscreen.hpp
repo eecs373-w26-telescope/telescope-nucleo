@@ -4,6 +4,12 @@
 #include "stdlib.h"
 
 namespace telescope {
+    enum class CatalogueType: uint8_t {
+        Messier,
+        NGC
+    };
+    
+
     class Touchscreen{
         public:
             Touchscreen(SPI_HandleTypeDef* hspi, GPIO_TypeDef* cs_port, uint16_t cs_pin,
@@ -40,6 +46,10 @@ namespace telescope {
             int get_selected_messier_id();
             const char* get_display();
 
+            //NGC supplementary
+            CatalogueType get_selected_type();
+
+
         private:
             SPI_HandleTypeDef* hspi_ = nullptr;
             GPIO_TypeDef* cs_port_ = nullptr;
@@ -55,12 +65,13 @@ namespace telescope {
             uint16_t dc_pin_;
 
             bool enter_ = false;
-            char display_[7];
+            char display_[8];
             int length_ = 0;
             bool view_ = false;
             int search_id_ = -1;
             bool search_ = false;
             bool main_ = false;
+            CatalogueType selected_catalogue_ = CatalogueType::Messier;
 
             void cs_low();
             void cs_high();
@@ -80,5 +91,10 @@ namespace telescope {
             void draw_char(uint16_t x, uint16_t y, char c, uint16_t font_color, uint16_t back_color, uint16_t scale);
             void draw_string(uint16_t x, uint16_t y, const char* str, uint16_t font_color, uint16_t back_color, uint8_t scale);
             bool messier_id_exists(int target_id);
+            bool NGC_id_exists(int target_id); // Checks if it exists under a cutoff
+            bool selected_id_exists();
+            int max_input_length() const;
+            void draw_catalogue_selector();
+            void select_catalogue(CatalogueType cat);
     };
 }

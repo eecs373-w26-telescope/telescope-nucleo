@@ -1,54 +1,11 @@
 #include <hw/inc/touchscreen.hpp>
 #include <hw/inc/spi_mode.hpp>
+#include <hw/inc/display.hpp>
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
 #include <cstdlib>
 
-
-static constexpr uint16_t LCD_W = 480;
-static constexpr uint16_t LCD_H = 320;
-
-static constexpr uint16_t TOP_BAR_H = 60;
-static constexpr uint16_t OPS_W = 140;
-static constexpr uint16_t KEYPAD_W = LCD_W - OPS_W;
-static constexpr uint16_t CONTENT_Y = TOP_BAR_H;
-static constexpr uint16_t CONTENT_H = LCD_H - TOP_BAR_H;
-
-static constexpr uint16_t GAP = 10;
-
-static constexpr uint16_t KEY_COLS = 3;
-static constexpr uint16_t KEY_ROWS = 4;
-
-static constexpr uint16_t KEY_W = (KEYPAD_W - GAP * (KEY_COLS+1)) / KEY_COLS;
-static constexpr uint16_t KEY_H = (CONTENT_H - GAP * (KEY_ROWS+1)) / KEY_ROWS;
-
-static constexpr uint16_t OPS_X = KEYPAD_W;
-static constexpr uint16_t OPS_BTN_W = OPS_W - 2 * GAP;
-static constexpr uint16_t OPS_BTN_H = (CONTENT_H - 4 * GAP)/3;
-
-static constexpr uint16_t M_BOX_X = 10;
-static constexpr uint16_t M_BOX_Y = 10;
-static constexpr uint16_t M_BOX_W = 50;
-static constexpr uint16_t M_BOX_H = 40;
-
-static constexpr uint16_t DSO_VIEW_BOX_W = 160;
-static constexpr uint16_t DSO_VIEW_BOX_X = 360;
-static constexpr uint16_t DSO_VIEW_BOX_H = 40;
-static constexpr uint16_t DSO_VIEW_BOX_Y = 10;
-
-static constexpr uint16_t DISPLAY_BOX_X = 70;
-static constexpr uint16_t DISPLAY_BOX_Y = 10;
-static constexpr uint16_t DISPLAY_BOX_W = OPS_X - DISPLAY_BOX_X;
-static constexpr uint16_t DISPLAY_BOX_H = 40;
-
-static constexpr uint16_t COLOR_RED      = 0xF800;
-static constexpr uint16_t COLOR_BG       = 0x0000;
-static constexpr uint16_t COLOR_BAR      = 0x1800;
-static constexpr uint16_t COLOR_INPUT    = 0x9000;
-static constexpr uint16_t COLOR_BTNBORDER = 0x5000;
-static constexpr uint16_t COLOR_BTNBG    = 0x8000;
-static constexpr uint16_t COLOR_BRIGHTRED = 0xB800;
 
 static const uint8_t Numberbitmap[10][5] = {
     {0x3E, 0x51, 0x49, 0x45, 0x3E}, // 0
@@ -76,7 +33,23 @@ static constexpr int MESSIER_IDS[] = {
     84, 65, 105, 72, 100, 90, 88, 61, 95, 59,
     58, 89, 109, 99, 108, 73, 98, 91, 97, 76
 };
-
+static constexpr NGCEntry NGC_SUBSET[] = {
+    {253, 7.1f},
+    {457, 6.4f},
+    {869, 5.3f},
+    {884, 6.1f},
+    {1499, 6.0f},
+    {1976, 4.0f},
+    {2244, 4.8f},
+    {2264, 3.9f},
+    {7000, 4.0f},
+    {7293, 7.6f}
+};
+struct NGCEntry {
+        int id;
+        float mag;
+    };
+static constexpr float NGC_MAG_CUTOFF = 9.5f;
 
 namespace telescope{
     Touchscreen::Touchscreen(
@@ -353,12 +326,22 @@ namespace telescope{
 
     void Touchscreen::draw_top_bar(){
         fill_rect(0, 0, LCD_W, TOP_BAR_H, COLOR_BAR);
-        draw_string(M_BOX_X + 13, M_BOX_Y + 6, "M", COLOR_BRIGHTRED, COLOR_BAR, 4);
+        draw_catalogue_selector();
+        //draw_string(M_BOX_X + 13, M_BOX_Y + 6, "M", COLOR_BRIGHTRED, COLOR_BAR, 4);
 
         fill_rect(DISPLAY_BOX_X, DISPLAY_BOX_Y, DISPLAY_BOX_W, DISPLAY_BOX_H, COLOR_BAR);
         draw_rect(DISPLAY_BOX_X, DISPLAY_BOX_Y, DISPLAY_BOX_W, DISPLAY_BOX_H, COLOR_BTNBORDER);
 
         view_change();
+    }
+    void Touchscreen::draw_catalogue_selector(){
+        uint16_t m_fill = (selected_catalogue_ == CatalogueType::Messier) ? COLOR_BRIGHTRED : COLOR_BTNBG;
+        uint16_t m_text = (selected_catalogue_ == CatalogueType::Messier) ? COLOR_BG : COLOR_BRIGHTRED;
+
+        uint16_t NGC_fill = (selected_catalogue_ == CatalogueType::NGC) ? COLOR_BRIGHTRED : COLOR_BTNBG;
+        uint16_t NGC_text = (selected_catalogue_ == CatalogueType::NGC) ? COLOR_BG : COLOR_BRIGHTRED;
+        draw_number(M_BOX_X, M_BOX_Y, M_BTN_W, CAT_BTN_H, m_fill, COLOR_BTNBORDER, "M", m_text, 3);
+        draw_number(NGC_BOX_X, M_BOX_Y, NGC_BTN_W, CAT_BTN_H, NGC_fill, COLOR_BTNBORDER, "NGC", NGC_text, 3);
     }
 
     void Touchscreen::draw_number(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t fill_color, uint16_t border_color, const char* label, uint16_t txt_color, uint16_t txt_scale){
@@ -417,15 +400,41 @@ namespace telescope{
         }
         return false;
     }
-
+    static constexpr std::size_t NGC_SUBSET_COUNT = sizeof(NGC_SUBSET) / sizeof(NGC_SUBSET[0]);
+    
+    bool Touchscreen::NGC_id_exists(int target_id){
+        for(std::size_t i = 0; i < NGC_SUBSET_COUNT; ++i ){
+            if(NGC_SUBSET[i].id == target_id){
+                return NGC_SUBSET[i].mag <= NGC_MAG_CUTOFF;
+            }
+        }
+        return false;
+    }
     void Touchscreen::input_display(const char* text){
         fill_rect(DISPLAY_BOX_X + 2, DISPLAY_BOX_Y + 2, DISPLAY_BOX_W - 4, DISPLAY_BOX_H - 4, COLOR_BAR);
         draw_rect(DISPLAY_BOX_X, DISPLAY_BOX_Y, DISPLAY_BOX_W, DISPLAY_BOX_H, COLOR_BTNBORDER);
         draw_string(DISPLAY_BOX_X + 8, DISPLAY_BOX_Y + 8, text, COLOR_BRIGHTRED, COLOR_BAR, 3);
     }
+    void Touchscreen::select_catalogue(CatalogueType cat){
+        if(selected_catalogue_ == cat) return;
+        selected_catalogue_ = cat;
+        display_[0] = '\0';
+        length_ = 0;
+        enter_ = 0;
+        input_display("");
+        draw_catalogue_selector();
+    }
 
     char Touchscreen::update_display_string(char c){
-        if(c == 'B'){
+        if(c == 'M'){
+            select_catalogue(CatalogueType::Messier);
+            return 'M';
+        }
+        else if(c == 'G'){
+            select_catalogue(CatalogueType::NGC);
+            return 'G';
+        }
+        else if(c == 'B'){
             if(length_ == 0) return 'B';
             length_--;
             display_[length_] = '\0';
@@ -447,7 +456,9 @@ namespace telescope{
                 error();
                 return 'E';
             }
-            if(!messier_id_exists(std::atoi(display_))){
+            int target_id = std::atoi(display_);
+            bool valid = (selected_catalogue_ == CatalogueType::Messier) ? messier_id_exists(target_id) : NGC_id_exists(target_id);
+            if(!valid){
                 error();
             }
             else{
@@ -461,7 +472,7 @@ namespace telescope{
         }
         else{
             if(c != ' '){
-                if(length_ >= 3){
+                if(length_ >= max_input_length()){
                     error();
                     return 'U';
                 }
@@ -517,6 +528,9 @@ namespace telescope{
         draw_string(120, 160, line2, COLOR_BRIGHTRED, COLOR_BG, 3);
         draw_string(120, 240, line3, COLOR_BRIGHTRED, COLOR_BG, 3);
     }
+    int Touchscreen::max_input_length() const{
+        return (selected_catalogue_ == CatalogueType::Messier) ? 3:4;
+    }
 
     void Touchscreen::error(){
         popup("ERROR", "DSO NOT EXIST", "TRY AGAIN");
@@ -526,8 +540,9 @@ namespace telescope{
 
     void Touchscreen::gosearch(){
         search_id_ = std::atoi(display_);
-        char output[8];
-        snprintf(output, sizeof(output), "M%s", display_);
+        char output[12];
+        const char* prefix = (selected_catalogue_ == CatalogueType::Messier) ? "M" : "NGC";
+        snprintf(output, sizeof(output), "%s%s", prefix, display_);
         enter_  = 0;
         search_ = 1;
         popup("SEARCHING:", output, "");
@@ -551,6 +566,14 @@ namespace telescope{
             draw_string(OPS_X + GAP + 15, DSO_VIEW_BOX_Y + 10, "OFF", COLOR_BRIGHTRED, COLOR_BTNBG, 3);
         }
     }
+    void Touchscreen::normal_process(char action, char button){
+        // if(length_ >= 4){
+        //     error();
+        // }
+        if(action == 'N'){
+            display_new_character(button);
+        }
+    }
 
     bool Touchscreen::get_search_status(){
         return search_;
@@ -570,13 +593,6 @@ namespace telescope{
         return display_;
     }
 
-    void Touchscreen::normal_process(char action, char button){
-        // if(length_ >= 4){
-        //     error();
-        // }
-        if(action == 'N'){
-            display_new_character(button);
-        }
-    }
+    
 
 } // namespace telescope
