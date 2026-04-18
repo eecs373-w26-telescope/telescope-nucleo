@@ -173,6 +173,11 @@ namespace telescope {
         raspi.init();
 
         imu.init();
+        {
+            char imu_buf[48];
+            int imu_len = snprintf(imu_buf, sizeof(imu_buf), "IMU calib: %s\r\n", imu.calibration_loaded() ? "loaded from flash" : "none (fresh boot)");
+            HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(imu_buf), static_cast<uint16_t>(imu_len), 100);
+        }
         gps.init();
 
         yaw_encoder.clear_error();
@@ -237,6 +242,18 @@ namespace telescope {
                     payload.calibration = imu.get_calibration();
                     filtered_imu_heading_deg = static_cast<float>(payload.heading) / 16.0f;
                     raspi.send_imu(payload);
+
+                    static bool calib_saved = false;
+                    static uint8_t mag_stable_count = 0;
+                    if (!calib_saved) {
+                        if ((payload.calibration & 0x03) == 0x03) {
+                            if (++mag_stable_count >= 10) {
+                                calib_saved = imu.save_calibration();
+                            }
+                        } else {
+                            mag_stable_count = 0;
+                        }
+                    }
                 }
             }
 
