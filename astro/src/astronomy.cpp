@@ -21,7 +21,7 @@ double Astronomy::wrap24(double x) {
 }
 
 double Astronomy::angular_distance_deg(const EquatorialCoordinates& a,
-    const EquatorialCoordinates& b) {
+    const EquatorialCoordinates& b) const {
     const double ra1 = deg2rad(a.right_ascension * 15.0);
     const double ra2 = deg2rad(b.right_ascension * 15.0);
     const double dec1 = deg2rad(a.declination);
@@ -127,7 +127,7 @@ bool Astronomy::is_object_in_FOV(const DSO& object, const FOV& fov) {
     return angular_distance_deg(object.pos, fov.center_pos) <= fov.radius;
 }
 
-float Astronomy::calculate_object_distance_from_FOV(const DSO& object, const FOV& fov) {
+float Astronomy::calculate_object_distance_from_FOV(const DSO& object, const FOV& fov) const {
     return static_cast<float>(angular_distance_deg(object.pos, fov.center_pos));
 }
 
@@ -206,6 +206,63 @@ int Astronomy::find_objects_within_FOV() {
 
 HorizontalCoordinates Astronomy::get_horizontal() const {
     return hc;
+}
+
+HorizontalCoordinates Astronomy::get_target_horizontal(const EquatorialCoordinates& target_eqc) const {
+    // Recompute LST from the currently stored UTC/location
+    int year   = utc.year;
+    int month  = utc.month;
+    int day    = utc.day;
+    int hour   = utc.hour;
+    int minute = utc.minute;
+    int second = utc.second;
+
+    if (month <= 2) {
+        year -= 1;
+        month += 12;
+    }
+
+    const int A = static_cast<int>(std::floor(year / 100.0));
+    const int B = 2 - A + static_cast<int>(std::floor(A / 4.0));
+
+    const double day_frac =
+        day + (hour / 24.0) + (minute / 1440.0) + (second / 86400.0);
+
+    const double JD =
+        std::floor(365.25 * (year + 4716)) +
+        std::floor(30.6001 * (month + 1)) +
+        day_frac + B - 1524.5;
+
+    const double d = JD - 2451545.0;
+    const double GMST_hours = wrap24(18.697374558 + 24.06570982441908 * d);
+    const double LST_hours  = wrap24(GMST_hours + gc.longitude / 15.0);
+
+    double H_hours = LST_hours - target_eqc.right_ascension;
+    if (H_hours < -12.0) H_hours += 24.0;
+    if (H_hours >  12.0) H_hours -= 24.0;
+    const double H_rad = H_hours * M_PI / 12.0;
+
+    const double lat_rad = deg2rad(gc.latitude);
+    const double dec_rad = deg2rad(target_eqc.declination);
+
+    // Calculate Altitude
+    double sin_alt = std::sin(lat_rad) * std::sin(dec_rad) +
+                     std::cos(lat_rad) * std::cos(dec_rad) * std::cos(H_rad);
+    sin_alt = std::max(-1.0, std::min(1.0, sin_alt));
+    const double alt_rad = std::asin(sin_alt);
+
+    // Calculate Azimuth
+    const double y = -std::sin(H_rad) * std::cos(dec_rad);
+    const double x = std::cos(lat_rad) * std::sin(dec_rad) - std::sin(lat_rad) * std::cos(dec_rad) * std::cos(H_rad);
+    const double az_rad = std::atan2(y, x);
+
+    HorizontalCoordinates target_hc;
+    target_hc.altitude = static_cast<float>(rad2deg(alt_rad));
+    double az_deg = rad2deg(az_rad);
+    if (az_deg < 0.0) az_deg += 360.0;
+    target_hc.azimuth = static_cast<float>(az_deg);
+
+    return target_hc;
 }
 
 double Astronomy::compute_parallactic_angle_rad(const EquatorialCoordinates& center) const {

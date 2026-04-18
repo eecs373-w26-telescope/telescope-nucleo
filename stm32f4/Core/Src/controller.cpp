@@ -454,18 +454,30 @@ namespace telescope {
                     if (state_machine.has_selected_object() && 
                         state_machine.current_state() == StateMachine::TelescopeState::SEARCH) {
                         sg.has_target = 1;
-                        float raw_x = 0.0f, raw_y = 0.0f;
-                        const FOV& fov = state_machine.current_fov();
-                        state_machine.project_gnomonic_parallactic_for_current_fov(
-                            state_machine.selected_object().pos, raw_x, raw_y);
-                        float mag = sqrtf(raw_x * raw_x + raw_y * raw_y);
+
+                        HorizontalCoordinates target_hc = state_machine.get_target_horizontal(state_machine.selected_object().pos);
+                        HorizontalCoordinates current_hc = state_machine.current_hc();
+
+                        float dAz = target_hc.azimuth - current_hc.azimuth;
+                        if (dAz > 180.0f) dAz -= 360.0f;
+                        if (dAz < -180.0f) dAz += 360.0f;
+
+                        float dAlt = target_hc.altitude - current_hc.altitude;
+
+                        // dx = Azimuth error (Left/Right)
+                        // dy = Altitude error (Up/Down)
+                        // Flip dAz to align with guidance screen convention: target to the Right = +X
+                        float dx = -dAz; 
+                        float dy = dAlt;
+
+                        float mag = sqrtf(dx * dx + dy * dy);
                         if (mag > 1e-6f) {
-                            sg.dx_e4 = static_cast<int16_t>((raw_x / mag) * 10000.0f);
-                            sg.dy_e4 = static_cast<int16_t>((raw_y / mag) * 10000.0f);
+                            sg.dx_e4 = static_cast<int16_t>((dx / mag) * 10000.0f);
+                            sg.dy_e4 = static_cast<int16_t>((dy / mag) * 10000.0f);
                         }
-                        float fov_r_rad = fov.radius * 3.14159265f / 180.0f;
-                        float dist_deg  = atanf(mag * tanf(fov_r_rad)) * 180.0f / 3.14159265f;
-                        sg.distance_e2  = static_cast<int16_t>(
+                        
+                        float dist_deg = state_machine.get_distance_to_selected_object();
+                        sg.distance_e2 = static_cast<int16_t>(
                             std::min(dist_deg * 100.0f, 32767.0f));
                     }
                     raspi.send_search_guidance(sg);
@@ -474,7 +486,7 @@ namespace telescope {
                         last_sg_debug_tick = now;
                         char sg_buf[96];
                         int sg_len = snprintf(sg_buf, sizeof(sg_buf),
-                            "SG: has_tgt=%d dx=%.4f dy=%.4f dist=%.2fdeg\r\n",
+                            "SG: has_tgt=%d dx=%.4f dy=%.4f dist=%.1fdeg\r\n",
                             sg.has_target,
                             sg.dx_e4 / 10000.0f,
                             sg.dy_e4 / 10000.0f,

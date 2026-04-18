@@ -20,9 +20,11 @@ public:
     int find_objects_within_FOV();
 
     bool is_object_in_FOV(const DSO& object, const FOV& fov);
-    float calculate_object_distance_from_FOV(const DSO& object, const FOV& fov);
+    float calculate_object_distance_from_FOV(const DSO& object, const FOV& fov) const;
 
     HorizontalCoordinates get_horizontal() const;
+
+    HorizontalCoordinates get_target_horizontal(const EquatorialCoordinates& target_eqc) const;
 
     static void project_gnomonic(const EquatorialCoordinates& center,
         const EquatorialCoordinates& obj,
@@ -59,7 +61,7 @@ private:
     static double deg2rad(double deg);
     static double rad2deg(double rad);
     static double wrap24(double x);
-    double angular_distance_deg(const EquatorialCoordinates& a, const EquatorialCoordinates& b);
+    double angular_distance_deg(const EquatorialCoordinates& a, const EquatorialCoordinates& b) const;
 
     std::vector<DSO> intersected_points(const FOV& new_FOV, const FOV& old_FOV);
     void compute_equatorial_bounds(const FOV& fov, float& ra_min_deg, float& ra_max_deg,

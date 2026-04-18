@@ -75,6 +75,15 @@ public:
     int last_search_result() const { return last_search_result_; }
     HorizontalCoordinates current_hc() const { return astronomy_.get_horizontal_coordinates(); }
 
+    HorizontalCoordinates get_target_horizontal(const EquatorialCoordinates& target_eqc) const {
+        return astronomy_.get_target_horizontal(target_eqc);
+    }
+
+    float get_distance_to_selected_object() const {
+        if (!has_selected_object_) return 0.0f;
+        return astronomy_.calculate_object_distance_from_FOV(selected_object_, astronomy_.get_current_fov());
+    }
+
     void send_dso_target_packet() {
         DSOTargetPayload pkt{};
         pkt.status         = DSO_OK;
