@@ -265,89 +265,6 @@ HorizontalCoordinates Astronomy::get_target_horizontal(const EquatorialCoordinat
     return target_hc;
 }
 
-double Astronomy::compute_parallactic_angle_rad(const EquatorialCoordinates& center) const {
-    const double lat = deg2rad(gc.latitude);
-    const double dec = deg2rad(center.declination);
-
-    // Recompute LST from the currently stored UTC/location
-    int year   = utc.year;
-    int month  = utc.month;
-    int day    = utc.day;
-    int hour   = utc.hour;
-    int minute = utc.minute;
-    int second = utc.second;
-
-    if (month <= 2) {
-        year -= 1;
-        month += 12;
-    }
-
-    const int A = static_cast<int>(std::floor(year / 100.0));
-    const int B = 2 - A + static_cast<int>(std::floor(A / 4.0));
-
-    const double day_frac =
-        day + (hour / 24.0) + (minute / 1440.0) + (second / 86400.0);
-
-    const double JD =
-        std::floor(365.25 * (year + 4716)) +
-        std::floor(30.6001 * (month + 1)) +
-        day_frac + B - 1524.5;
-
-    const double d = JD - 2451545.0;
-    const double GMST_hours = wrap24(18.697374558 + 24.06570982441908 * d);
-    const double LST_hours  = wrap24(GMST_hours + gc.longitude / 15.0);
-
-    double H_hours = LST_hours - center.right_ascension;
-    if (H_hours < -12.0) H_hours += 24.0;
-    if (H_hours >  12.0) H_hours -= 24.0;
-
-    const double H = H_hours * M_PI / 12.0;
-
-    return std::atan2(
-        std::sin(H),
-        std::tan(lat) * std::cos(dec) - std::sin(dec) * std::cos(H)
-    );
-}
-
-void Astronomy::project_gnomonic(const EquatorialCoordinates& center,
-                                 const EquatorialCoordinates& obj,
-                                 float fov_radius_deg,
-                                 float& x_out, float& y_out) {
-    const double ra0  = center.right_ascension * 15.0 * M_PI / 180.0;
-    const double dec0 = center.declination * M_PI / 180.0;
-    const double ra   = obj.right_ascension * 15.0 * M_PI / 180.0;
-    const double dec  = obj.declination * M_PI / 180.0;
-
-    const double dRA = ra - ra0;
-
-    const double D =
-        std::sin(dec0) * std::sin(dec) +
-        std::cos(dec0) * std::cos(dec) * std::cos(dRA);
-
-    // If D <= 1e-6, the object is 90 degrees or more away from the pointing center.
-    // It is physically behind the focal plane and cannot be projected.
-    if (D <= 1e-6) {
-        // Assign a massive coordinate to force it out of bounds 
-        // so the guidance distance reads as extremely large.
-        x_out = 9999.0f;
-        y_out = 9999.0f;
-        return;
-    }
-
-    const double fov_radius_rad = fov_radius_deg * M_PI / 180.0;
-
-    // Raw equatorial-frame gnomonic projection
-    const double x_eq =
-        (std::cos(dec) * std::sin(dRA) / D) / fov_radius_rad;
-
-    const double y_eq =
-        ((std::cos(dec0) * std::sin(dec) -
-            std::sin(dec0) * std::cos(dec) * std::cos(dRA)) / D) / fov_radius_rad;
-
-    x_out = static_cast<float>(x_eq);
-    y_out = static_cast<float>(y_eq);
-}
-
 void Astronomy::project_gnomonic_local(const EquatorialCoordinates& center,
     const EquatorialCoordinates& obj,
     float fov_radius_deg,
@@ -393,27 +310,4 @@ void Astronomy::project_gnomonic_local(const EquatorialCoordinates& center,
     // We negate y_hor because screen Y-coordinates increase downward.
     x_out = static_cast<float>(x_hor);
     y_out = static_cast<float>(-y_hor);
-}
-
-void Astronomy::project_gnomonic_parallactic(const EquatorialCoordinates& center,
-    const EquatorialCoordinates& obj,
-    float fov_radius_deg,
-    float& x_out, float& y_out) const {
-    float x_eq = 0.0f;
-    float y_eq = 0.0f;
-
-    Astronomy::project_gnomonic(center, obj, fov_radius_deg, x_eq, y_eq);
-
-    const double q = compute_parallactic_angle_rad(center);
-
-    // Invert X-axis: RA increases East (Left). 
-    // Negate to map X to West (Right) so it aligns with positive mount Azimuth.
-    x_eq = -x_eq;
-
-    // Rotate equatorial projection into local horizon-aligned axes (Right, Up)
-    const double x_rot =  x_eq * std::cos(q) + y_eq * std::sin(q);
-    const double y_rot = -x_eq * std::sin(q) + y_eq * std::cos(q);
-
-    x_out = static_cast<float>(x_rot);
-    y_out = static_cast<float>(y_rot);
 }

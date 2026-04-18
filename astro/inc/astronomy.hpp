@@ -26,19 +26,7 @@ public:
 
     HorizontalCoordinates get_target_horizontal(const EquatorialCoordinates& target_eqc) const;
 
-    static void project_gnomonic(const EquatorialCoordinates& center,
-        const EquatorialCoordinates& obj,
-        float fov_radius_deg,
-        float& x_out, float& y_out);
-
-    double compute_parallactic_angle_rad(const EquatorialCoordinates& center) const;
-
     void project_gnomonic_local(const EquatorialCoordinates& center,
-        const EquatorialCoordinates& obj,
-        float fov_radius_deg,
-        float& x_out, float& y_out) const;
-
-    void project_gnomonic_parallactic(const EquatorialCoordinates& center,
         const EquatorialCoordinates& obj,
         float fov_radius_deg,
         float& x_out, float& y_out) const;
