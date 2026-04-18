@@ -105,6 +105,18 @@ public:
         );
     }
 
+    void project_gnomonic_parallactic_for_current_fov(const EquatorialCoordinates& obj,
+        float& x_out,
+        float& y_out) const {
+        astronomy_.project_gnomonic_parallactic(
+        astronomy_.get_current_fov().center_pos,
+        obj,
+        astronomy_.get_current_fov().radius,
+        x_out,
+        y_out
+        );
+    }
+
 private:
     void sample_search_events() {
         const bool search_now = touchscreen_.get_search_status();

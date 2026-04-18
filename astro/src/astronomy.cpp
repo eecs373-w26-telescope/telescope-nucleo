@@ -267,16 +267,25 @@ void Astronomy::project_gnomonic(const EquatorialCoordinates& center,
         std::sin(dec0) * std::sin(dec) +
         std::cos(dec0) * std::cos(dec) * std::cos(dRA);
 
-    const double safe_D = (std::abs(D) < 1e-9) ? 1e-9 : D;
+    // If D <= 1e-6, the object is 90 degrees or more away from the pointing center.
+    // It is physically behind the focal plane and cannot be projected.
+    if (D <= 1e-6) {
+        // Assign a massive coordinate to force it out of bounds 
+        // so the guidance distance reads as extremely large.
+        x_out = 9999.0f;
+        y_out = 9999.0f;
+        return;
+    }
+
     const double fov_radius_rad = fov_radius_deg * M_PI / 180.0;
 
     // Raw equatorial-frame gnomonic projection
     const double x_eq =
-        (std::cos(dec) * std::sin(dRA) / safe_D) / fov_radius_rad;
+        (std::cos(dec) * std::sin(dRA) / D) / fov_radius_rad;
 
     const double y_eq =
         ((std::cos(dec0) * std::sin(dec) -
-            std::sin(dec0) * std::cos(dec) * std::cos(dRA)) / safe_D) / fov_radius_rad;
+            std::sin(dec0) * std::cos(dec) * std::cos(dRA)) / D) / fov_radius_rad;
 
     x_out = static_cast<float>(x_eq);
     y_out = static_cast<float>(y_eq);
@@ -300,4 +309,27 @@ void Astronomy::project_gnomonic_local(const EquatorialCoordinates& center,
     // extra 90 deg screen rotation
     x_out = static_cast<float>( y_rot);
     y_out = static_cast<float>(-x_rot);
+}
+
+void Astronomy::project_gnomonic_parallactic(const EquatorialCoordinates& center,
+    const EquatorialCoordinates& obj,
+    float fov_radius_deg,
+    float& x_out, float& y_out) const {
+    float x_eq = 0.0f;
+    float y_eq = 0.0f;
+
+    Astronomy::project_gnomonic(center, obj, fov_radius_deg, x_eq, y_eq);
+
+    const double q = compute_parallactic_angle_rad(center);
+
+    // Invert X-axis: RA increases East (Left). 
+    // Negate to map X to West (Right) so it aligns with positive mount Azimuth.
+    x_eq = -x_eq;
+
+    // Rotate equatorial projection into local horizon-aligned axes (Right, Up)
+    const double x_rot =  x_eq * std::cos(q) + y_eq * std::sin(q);
+    const double y_rot = -x_eq * std::sin(q) + y_eq * std::cos(q);
+
+    x_out = static_cast<float>(x_rot);
+    y_out = static_cast<float>(-y_rot);
 }

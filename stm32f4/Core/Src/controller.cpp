@@ -379,6 +379,12 @@ namespace telescope {
                 constexpr float RAW_TO_DEG = 360.0f / 16384.0f;
                 float yaw_deg_sm   = filtered_yaw_raw   * RAW_TO_DEG;
                 float pitch_deg_sm = filtered_pitch_raw * RAW_TO_DEG;
+
+                // Map angles > 180 to negative altitude values (e.g. 270 deg -> -90 deg)
+                if (pitch_deg_sm > 180.0f) {
+                    pitch_deg_sm -= 360.0f;
+                }
+
                 //float azimuth_deg = std::fmod(filtered_imu_heading_deg + yaw_deg_sm + 360.0f, 360.0f);
                 //float az2 = std::fmod(filtered_imu_heading_deg - yaw_deg_sm + 360.0f, 360.0f);
                 //float azimuth_deg = std::fmod(filtered_imu_heading_deg + yaw_deg_sm + 180.0f + 360.0f, 360.0f);
@@ -442,17 +448,14 @@ namespace telescope {
                     raspi.send_fov_objects(pkt, pkt.count);
                 }
 
-                //TODO: CHANGE GNOMONIC??
                 {
                     SearchGuidancePayload sg{};
                     if (state_machine.has_selected_object()) {
                         sg.has_target = 1;
                         float raw_x = 0.0f, raw_y = 0.0f;
                         const FOV& fov = state_machine.current_fov();
-                        Astronomy::project_gnomonic(
-                            fov.center_pos,
-                            state_machine.selected_object().pos,
-                            fov.radius, raw_x, raw_y);
+                        state_machine.project_gnomonic_parallactic_for_current_fov(
+                            state_machine.selected_object().pos, raw_x, raw_y);
                         float mag = sqrtf(raw_x * raw_x + raw_y * raw_y);
                         if (mag > 1e-6f) {
                             sg.dx_e4 = static_cast<int16_t>((raw_x / mag) * 10000.0f);

@@ -36,6 +36,11 @@ public:
         float fov_radius_deg,
         float& x_out, float& y_out) const;
 
+    void project_gnomonic_parallactic(const EquatorialCoordinates& center,
+        const EquatorialCoordinates& obj,
+        float fov_radius_deg,
+        float& x_out, float& y_out) const;
+
 private:
     const Telescope telescope;
     telescope::SDCard& db;
