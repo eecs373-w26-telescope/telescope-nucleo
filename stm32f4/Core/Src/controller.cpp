@@ -409,6 +409,10 @@ namespace telescope {
                 state_machine.update_sensors(pitch_deg_sm, azimuth_deg, lat, lon, time);
                 state_machine.tick();
 
+                if (state_machine.selected_messier_id() >= 0) {
+                    state_machine.send_dso_target_packet();
+                }
+
                 {
                     const FOV& fov = state_machine.current_fov();
                     FovObjectsPayload pkt{};

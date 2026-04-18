@@ -73,8 +73,25 @@ public:
     EquatorialCoordinates current_eqc() const { return astronomy_.get_equatorial_coordinates(); }
     const FOV& current_fov() const { return astronomy_.get_current_fov(); }
     int last_search_result() const { return last_search_result_; }
-    HorizontalCoordinates current_hc() const {return astronomy_.get_horizontal_coordinates();
-}
+    HorizontalCoordinates current_hc() const { return astronomy_.get_horizontal_coordinates(); }
+
+    void send_dso_target_packet() {
+        DSOTargetPayload pkt{};
+        pkt.status         = DSO_OK;
+        pkt.catalog_number = static_cast<uint16_t>(selected_messier_id_);
+        if (has_selected_object_) {
+            pkt.ra_mas       = static_cast<int32_t>(selected_object_.pos.right_ascension * 54000000.0f);
+            pkt.dec_mas      = static_cast<int32_t>(selected_object_.pos.declination * 3600000.0f);
+            pkt.magnitude_e2 = static_cast<int16_t>(selected_object_.brightness * 100.0f);
+            const size_t n = std::min(selected_object_.name.size(), sizeof(pkt.name) - 1);
+            std::memcpy(pkt.name, selected_object_.name.c_str(), n);
+        } else {
+            const std::string nm = "M" + std::to_string(selected_messier_id_);
+            const size_t n = std::min(nm.size(), sizeof(pkt.name) - 1);
+            std::memcpy(pkt.name, nm.c_str(), n);
+        }
+        raspi_.send_dso_target(pkt);
+    }
 
 private:
     void sample_search_events() {
@@ -128,24 +145,6 @@ private:
             }
         }
         return false;
-    }
-
-    void send_dso_target_packet() {
-        DSOTargetPayload pkt{};
-        pkt.status         = DSO_OK;
-        pkt.catalog_number = static_cast<uint16_t>(selected_messier_id_);
-        if (has_selected_object_) {
-            pkt.ra_mas       = static_cast<int32_t>(selected_object_.pos.right_ascension * 54000000.0f);
-            pkt.dec_mas      = static_cast<int32_t>(selected_object_.pos.declination * 3600000.0f);
-            pkt.magnitude_e2 = static_cast<int16_t>(selected_object_.brightness * 100.0f);
-            const size_t n = std::min(selected_object_.name.size(), sizeof(pkt.name) - 1);
-            std::memcpy(pkt.name, selected_object_.name.c_str(), n);
-        } else {
-            const std::string nm = "M" + std::to_string(selected_messier_id_);
-            const size_t n = std::min(nm.size(), sizeof(pkt.name) - 1);
-            std::memcpy(pkt.name, nm.c_str(), n);
-        }
-        raspi_.send_dso_target(pkt);
     }
 
     void transition(TelescopeState next) {
