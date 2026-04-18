@@ -464,7 +464,15 @@ namespace telescope{
     }
 
     void Touchscreen::display_new_character(char button){
-        // input_display handles redrawing everything with the prefix
+        // Calculate the starting X offset. 
+        // "M" prefix = 1 char, "N" prefix = 1 char (wait, "N" was originally "NGC")
+        // Since we shortened it to "N", the prefix is always 1 character.
+        // We need to draw the new character at position (length_ - 1).
+        // The total string is [prefix][digit][digit]...
+        // So the new character is at index (length_) in the visually displayed string.
+        uint16_t x = DISPLAY_BOX_X + 8 + length_ * 6 * 3;
+        uint16_t y = DISPLAY_BOX_Y + 8;
+        draw_char(x, y, button, COLOR_BRIGHTRED, COLOR_BAR, 3);
     }
 
     void Touchscreen::draw_main(){
