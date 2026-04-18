@@ -133,8 +133,6 @@ namespace telescope {
     constexpr uint32_t ENCODER_HZ       = 10;
     constexpr uint32_t SERIAL_DEBUG_HZ  = 5;
     constexpr uint32_t STATE_MACHINE_HZ = 10;
-    constexpr uint32_t AZ_DEBUG_HZ      = 5;
-    constexpr uint32_t ASTRO_DEBUG_HZ   = 5;
     constexpr uint32_t SG_DEBUG_HZ      = 5;
 
     constexpr uint32_t IMU_INTERVAL_MS           = hz_to_ms(IMU_HZ);
@@ -143,8 +141,6 @@ namespace telescope {
     constexpr uint32_t SERIAL_INTERVAL_MS        = hz_to_ms(SERIAL_DEBUG_HZ);
     constexpr uint32_t TOUCH_DEBOUNCE_MS         = 500;
     constexpr uint32_t STATE_MACHINE_INTERVAL_MS = hz_to_ms(STATE_MACHINE_HZ);
-    constexpr uint32_t AZ_DEBUG_INTERVAL_MS      = hz_to_ms(AZ_DEBUG_HZ);
-    constexpr uint32_t ASTRO_DEBUG_INTERVAL_MS   = hz_to_ms(ASTRO_DEBUG_HZ);
     constexpr uint32_t SG_DEBUG_INTERVAL_MS      = hz_to_ms(SG_DEBUG_HZ);
 
     float filtered_imu_heading_deg = 0.0f;
@@ -157,8 +153,6 @@ namespace telescope {
     uint32_t last_serial_tick = 0;
     uint32_t last_touch_tick = 0;
     uint32_t last_sm_tick = 0;
-    uint32_t last_az_debug_tick = 0;
-    uint32_t last_astro_debug_tick = 0;
     uint32_t last_sg_debug_tick = 0;
 
     /***********************
@@ -187,7 +181,6 @@ namespace telescope {
         touchscreen.draw_main();
 
         xpt.init(); 
-        //TODO: ADD ANYTHING ELSE TO INITIALIZE THE TOUCH SCREEN HERE
 
         int mount_res = sd_card.mount();
         int open_res  = sd_card.open_catalogue("0:catalogue.bin");
@@ -204,7 +197,6 @@ namespace telescope {
 
         if (open_res == 0) {
             std::vector<DSO> dump;
-            // Search whole sky but limit to enough objects to find 10 of each
             sd_card.search_objects_in_bounds(0.0f, 359.99f, -90.0f, 90.0f, dump, 200);
 
             const char* hdr = "Catalogue Dump (First 10 M and 10 NGC):\r\n";
@@ -236,12 +228,10 @@ namespace telescope {
         state_machine.init();
     }
 
-    //TODO: MOVE THIS ELSEWHERE
     bool prev_button_pressed = false;
 
     [[noreturn]] auto loop() -> void {
         for (;;) {
-            // Send periodic sensor updates to the raspi
             raspi.process();
             gps.process();
 
@@ -301,54 +291,24 @@ namespace telescope {
                 constexpr float RAW_TO_DEG_DBG = 360.0f / 16384.0f;
                 float yaw_deg = filtered_yaw_raw   * RAW_TO_DEG_DBG;
                 float pitch_deg = filtered_pitch_raw * RAW_TO_DEG_DBG;
-                char buf[120];
-                int len = snprintf(buf, sizeof(buf),
-                                   "IMU: %s  HDG: %.1f  CAL: S%d G%d A%d M%d  GPS: %s  SAT: %d  YAW: %.1f  PIT: %.1f\r\n",
-                                   imu_ok ? "OK" : "FAIL",
-                                   filtered_imu_heading_deg,
-                                   (cal >> 6) & 3, (cal >> 4) & 3,
-                                   (cal >> 2) & 3, cal & 3,
-                                   gps.has_fix() ? "FIX" : "---",
-                                   gps.num_satellites,
-                                   static_cast<double>(yaw_deg),
-                                   static_cast<double>(pitch_deg));
-                HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(buf),
-                                  static_cast<uint16_t>(len), 100);
 
                 EquatorialCoordinates eqc = state_machine.current_eqc();
-                char sm_buf[120];
-                int sm_len = snprintf(sm_buf, sizeof(sm_buf),
-                                      "SM: state=%d target=M%d found=%d fov_objs=%d search_res=%d RA=%.2f DEC=%.2f%s\r\n",
-                                      static_cast<int>(state_machine.current_state()),
-                                      state_machine.selected_messier_id(),
-                                      state_machine.has_selected_object() ? 1 : 0,
-                                      state_machine.fov_object_count(),
-                                      state_machine.last_search_result(),
-                                      static_cast<double>(eqc.right_ascension),
-                                      static_cast<double>(eqc.declination),
-                                      gps.has_fix() ? "" : (raspi.has_raspi_time() ? " [RASPI-TIME]" : " [BUILD-TIME]"));
-                HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(sm_buf),
-                                  static_cast<uint16_t>(sm_len), 100);
-
+                HorizontalCoordinates hc = state_machine.current_hc();
                 const FOV& fov = state_machine.current_fov();
-                char fov_buf[80];
-                int fov_len = snprintf(fov_buf, sizeof(fov_buf),
-                                       "FOV: center=%.2fh/%.2fd r=%.2fd objects=%d\r\n",
-                                       static_cast<double>(fov.center_pos.right_ascension),
-                                       static_cast<double>(fov.center_pos.declination),
-                                       static_cast<double>(fov.radius),
-                                       static_cast<int>(fov.objects.size()));
-                HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(fov_buf), static_cast<uint16_t>(fov_len), 100);
 
-                for (const auto& obj : fov.objects) {
-                    char obj_buf[64];
-                    int obj_len = snprintf(obj_buf, sizeof(obj_buf), "  %s RA=%.2f DEC=%.2f mag=%.1f\r\n",
-                                          obj.name.c_str(),
-                                          static_cast<double>(obj.pos.right_ascension),
-                                          static_cast<double>(obj.pos.declination),
-                                          static_cast<double>(obj.brightness));
-                    HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(obj_buf), static_cast<uint16_t>(obj_len), 100);
-                }
+                char buf[256];
+                int len = snprintf(buf, sizeof(buf),
+                                   "[%lu] ST:%d | IMU:%s HDG:%.1f CAL:S%dG%dA%dM%d | ENC:Y%.1f P%.1f | ALT:%.1f AZ:%.1f | RA:%.2fh DEC:%.2fd | FOV:%d objs\r\n",
+                                   now,
+                                   static_cast<int>(state_machine.current_state()),
+                                   imu_ok ? "OK" : "FAIL",
+                                   filtered_imu_heading_deg,
+                                   (cal >> 6) & 3, (cal >> 4) & 3, (cal >> 2) & 3, cal & 3,
+                                   static_cast<double>(yaw_deg), static_cast<double>(pitch_deg),
+                                   static_cast<double>(hc.altitude), static_cast<double>(hc.azimuth),
+                                   static_cast<double>(eqc.right_ascension), static_cast<double>(eqc.declination),
+                                   static_cast<int>(fov.objects.size()));
+                HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(buf), static_cast<uint16_t>(len), 100);
 
                 StateSyncPayload sync{};
                 sync.state    = static_cast<uint8_t>(state_machine.current_state());
@@ -357,7 +317,6 @@ namespace telescope {
                 raspi.send_state_sync(sync);
             }
 
-            // Touchscreen input processing
             if(xpt.is_pressed() && (now - last_touch_tick >= TOUCH_DEBOUNCE_MS)){
                 last_touch_tick = now;
                 if(xpt.process()){
@@ -385,15 +344,12 @@ namespace telescope {
 
             touchscreen.tick(now);
 
-            // State machine tick
-            //TODO: I DONT THINK THIS STATE_MACHINE_INTERVAL IS NECESSARY
             if (now - last_sm_tick >= STATE_MACHINE_INTERVAL_MS) {
                 last_sm_tick = now;
                 constexpr float RAW_TO_DEG = 360.0f / 16384.0f;
                 float yaw_deg_sm   = filtered_yaw_raw   * RAW_TO_DEG;
                 float pitch_deg_sm = filtered_pitch_raw * RAW_TO_DEG;
 
-                // Map angles > 180 to negative altitude values (e.g. 270 deg -> -90 deg)
                 if (pitch_deg_sm > 180.0f) {
                     pitch_deg_sm -= 360.0f;
                 }
@@ -448,9 +404,8 @@ namespace telescope {
                         float x = 0.0f, y = 0.0f;
                         state_machine.project_gnomonic_local_for_current_fov(obj.pos, x, y);
                         
-                        // Parse name for ID and mode
                         int id = 0;
-                        uint8_t mode = 0; // 0=M, 1=N
+                        uint8_t mode = 0;
                         if (obj.name.find("N") != std::string::npos) {
                             id = std::stoi(obj.name.substr(1));
                             mode = 1;
@@ -468,7 +423,6 @@ namespace telescope {
                     raspi.send_fov_objects(pkt, pkt.count);
                 }
                 
-                // Only show guidance arrow if we are actively searching for a target
                 {
                     SearchGuidancePayload sg{};
                     if (state_machine.has_selected_object() && 
@@ -478,17 +432,14 @@ namespace telescope {
                         HorizontalCoordinates target_hc = state_machine.get_target_horizontal(state_machine.selected_object().pos);
                         HorizontalCoordinates current_hc = state_machine.current_hc();
 
-                        // Convert to radians for trig functions
                         constexpr float DEG_TO_RAD = 3.14159265f / 180.0f;
                         float tgt_alt_rad = target_hc.altitude * DEG_TO_RAD;
                         float tgt_az_rad  = target_hc.azimuth * DEG_TO_RAD;
                         float cur_alt_rad = current_hc.altitude * DEG_TO_RAD;
                         float cur_az_rad  = current_hc.azimuth * DEG_TO_RAD;
 
-                        // Difference in azimuth
                         float dAz_rad = tgt_az_rad - cur_az_rad;
 
-                        // Calculate singularity-free viewplane projection
                         float dx = cosf(tgt_alt_rad) * sinf(dAz_rad);
                         float dy = sinf(tgt_alt_rad) * cosf(cur_alt_rad) - 
                                 cosf(tgt_alt_rad) * sinf(cur_alt_rad) * cosf(dAz_rad);
@@ -496,7 +447,7 @@ namespace telescope {
                         float mag = sqrtf(dx * dx + dy * dy);
                         if (mag > 1e-6f) {
                             sg.dx_e4 = static_cast<int16_t>((dx / mag) * 10000.0f);
-                            sg.dy_e4 = static_cast<int16_t>((-dy / mag) * 10000.0f); // Negate for screen Y-down
+                            sg.dy_e4 = static_cast<int16_t>((-dy / mag) * 10000.0f);
                         }
                         
                         float dist_deg = state_machine.get_distance_to_selected_object();
@@ -518,58 +469,8 @@ namespace telescope {
                                           static_cast<uint16_t>(sg_len), 100);
                     }
                 }
-
-                EquatorialCoordinates eqc = state_machine.current_eqc();
-                HorizontalCoordinates hc = state_machine.current_hc();
-                const FOV& fov = state_machine.current_fov();
-
-                if (now - last_astro_debug_tick >= ASTRO_DEBUG_INTERVAL_MS) {
-                    last_astro_debug_tick = now;
-                    char astro_buf[256];
-                    int astro_len = snprintf(astro_buf, sizeof(astro_buf),
-                        "ASTRO:\r\n"
-                        "  ALT: %.2f deg\r\n"
-                        "  AZ : %.2f deg\r\n"
-                        "  LAT: %.5f  LON: %.5f\r\n"
-                        "  UTC: %04d-%02d-%02d %02d:%02d:%02d\r\n"
-                        "  RA : %.2f hr\r\n"
-                        "  DEC: %.2f deg\r\n"
-                        "  FOV r: %.2f deg  objs:%d%s\r\n",
-                        static_cast<double>(hc.altitude),
-                        static_cast<double>(hc.azimuth),
-                        static_cast<double>(lat),
-                        static_cast<double>(lon),
-                        time.year, time.month, time.day,
-                        time.hour, time.minute, time.second,
-                        static_cast<double>(eqc.right_ascension),
-                        static_cast<double>(eqc.declination),
-                        static_cast<double>(fov.radius),
-                        static_cast<int>(fov.objects.size()),
-                        gps.has_fix() ? "" : " [FALLBACK]"
-                    );
-                    HAL_UART_Transmit(&huart3,
-                        reinterpret_cast<uint8_t*>(astro_buf),
-                        static_cast<uint16_t>(astro_len),
-                        100);
-
-                    for (const auto& obj : fov.objects) {
-                        char obj_buf[96];
-                        int obj_len = snprintf(obj_buf, sizeof(obj_buf),
-                            "  %s RA=%.2f DEC=%.2f mag=%.1f\r\n",
-                            obj.name.c_str(),
-                            static_cast<double>(obj.pos.right_ascension),
-                            static_cast<double>(obj.pos.declination),
-                            static_cast<double>(obj.brightness)
-                        );
-                        HAL_UART_Transmit(&huart3,
-                            reinterpret_cast<uint8_t*>(obj_buf),
-                            static_cast<uint16_t>(obj_len),
-                            100);
-                    }
-                }
             }
 
-            // Button press sends debug packet
             bool button_pressed = (HAL_GPIO_ReadPin(DEBUG_BUTTON_PORT, DEBUG_BUTTON_PIN) == GPIO_PIN_RESET);
             if (button_pressed && !prev_button_pressed) {
                 DebugPayload dbg{};
