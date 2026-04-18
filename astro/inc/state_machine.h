@@ -185,6 +185,9 @@ private:
             search_requested_ = false;
             has_selected_object_ = false;
             selected_messier_id_ = -1;
+            DSOTargetPayload clear{};
+            clear.status = DSO_NO_TARGET;
+            raspi_.send_dso_target(clear);
             transition(TelescopeState::IDLE);
             return;
         }
@@ -214,6 +217,9 @@ private:
             search_requested_ = false;
             has_selected_object_ = false;
             selected_messier_id_ = -1;
+            DSOTargetPayload clear{};
+            clear.status = DSO_NO_TARGET;
+            raspi_.send_dso_target(clear);
             transition(TelescopeState::IDLE);
             return;
         }
