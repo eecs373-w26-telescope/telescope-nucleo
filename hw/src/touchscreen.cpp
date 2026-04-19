@@ -310,43 +310,62 @@ namespace telescope{
         }
     }
 
-    void Touchscreen::draw_char(uint16_t x, uint16_t y, char c, uint16_t font_color, uint16_t back_color, uint16_t scale){
-        uint8_t bits[5];
-        if(!get_bitmap(c, bits)) return;
-
-        static uint8_t buf[6 * 7 * 8 * 8 * 2]; // supports up to scale 8
+    static uint32_t build_char_buf(const uint8_t* bits, uint16_t font_color, uint16_t back_color, uint8_t scale, uint8_t* out){
         uint32_t idx = 0;
-
         for(uint8_t row = 0; row < 7; row++){
             for(uint8_t sr = 0; sr < scale; sr++){
                 for(uint8_t col = 0; col < 5; col++){
                     uint16_t color = ((bits[col] >> row) & 1) ? font_color : back_color;
                     for(uint8_t sc = 0; sc < scale; sc++){
-                        buf[idx++] = color >> 8;
-                        buf[idx++] = color & 0xFF;
+                        out[idx++] = color >> 8;
+                        out[idx++] = color & 0xFF;
                     }
                 }
                 for(uint8_t sc = 0; sc < scale; sc++){
-                    buf[idx++] = back_color >> 8;
-                    buf[idx++] = back_color & 0xFF;
+                    out[idx++] = back_color >> 8;
+                    out[idx++] = back_color & 0xFF;
                 }
             }
         }
+        return idx;
+    }
+
+    void Touchscreen::draw_char(uint16_t x, uint16_t y, char c, uint16_t font_color, uint16_t back_color, uint16_t scale){
+        uint8_t bits[5];
+        if(!get_bitmap(c, bits)) return;
+
+        static uint8_t buf[6 * 7 * 8 * 8 * 2];
+        uint32_t len = build_char_buf(bits, font_color, back_color, scale, buf);
 
         spi_mode::set_mode0(hspi_);
         HAL_GPIO_WritePin(cs_port_, cs_pin_, GPIO_PIN_RESET);
         set_window_raw(x, y, x + 6*scale - 1, y + 7*scale - 1);
-        HAL_SPI_Transmit(hspi_, buf, idx, HAL_MAX_DELAY);
+        HAL_SPI_Transmit(hspi_, buf, len, HAL_MAX_DELAY);
         HAL_GPIO_WritePin(cs_port_, cs_pin_, GPIO_PIN_SET);
         spi_mode::set_mode1(hspi_);
     }
 
     void Touchscreen::draw_string(uint16_t x, uint16_t y, const char* str, uint16_t font_color, uint16_t back_color, uint8_t scale){
+        if(!*str) return;
+
+        static uint8_t buf[6 * 7 * 8 * 8 * 2];
+
+        spi_mode::set_mode0(hspi_);
+        HAL_GPIO_WritePin(cs_port_, cs_pin_, GPIO_PIN_RESET);
+
         while(*str){
-            draw_char(x, y, *str, font_color, back_color, scale);
+            uint8_t bits[5];
+            if(get_bitmap(*str, bits)){
+                uint32_t len = build_char_buf(bits, font_color, back_color, scale, buf);
+                set_window_raw(x, y, x + 6*scale - 1, y + 7*scale - 1);
+                HAL_SPI_Transmit(hspi_, buf, len, HAL_MAX_DELAY);
+            }
             x += 6 * scale;
             str++;
         }
+
+        HAL_GPIO_WritePin(cs_port_, cs_pin_, GPIO_PIN_SET);
+        spi_mode::set_mode1(hspi_);
     }
 
     void Touchscreen::draw_top_bar(){
