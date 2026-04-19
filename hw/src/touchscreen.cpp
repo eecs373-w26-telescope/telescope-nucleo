@@ -519,15 +519,15 @@ namespace telescope{
     }
 
     void Touchscreen::error(){
-        popup("ERROR", "DSO NOT EXIST", "TRY AGAIN");
+        popup("ERROR", "INVALID DSO", "");
         error_pending_ = true;
         error_until_tick_ = HAL_GetTick() + 500;
     }
 
     void Touchscreen::tare_feedback(){
-        popup("TARE", "SET", "");
+        popup("TARED", "", "");
         tare_feedback_pending_ = true;
-        tare_feedback_until_tick_ = HAL_GetTick() + 700;
+        tare_feedback_until_tick_ = HAL_GetTick() + 500;
     }
 
     void Touchscreen::tick(uint32_t now){
