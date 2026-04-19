@@ -296,14 +296,32 @@ namespace telescope{
         uint8_t bits[5];
         if(!get_bitmap(c, bits)) return;
 
-        for(uint8_t col = 0; col < 5; col++){
-            for(uint8_t row = 0; row < 7; row++){
-                bool on = (bits[col] >> row) & 0b1;
-                uint16_t color = on ? font_color : back_color;
-                fill_rect(x + col*scale, y + row*scale, scale, scale, color);
+        static uint8_t buf[6 * 7 * 8 * 8 * 2]; // supports up to scale 8
+        uint32_t idx = 0;
+
+        for(uint8_t row = 0; row < 7; row++){
+            for(uint8_t sr = 0; sr < scale; sr++){
+                for(uint8_t col = 0; col < 5; col++){
+                    uint16_t color = ((bits[col] >> row) & 1) ? font_color : back_color;
+                    for(uint8_t sc = 0; sc < scale; sc++){
+                        buf[idx++] = color >> 8;
+                        buf[idx++] = color & 0xFF;
+                    }
+                }
+                for(uint8_t sc = 0; sc < scale; sc++){
+                    buf[idx++] = back_color >> 8;
+                    buf[idx++] = back_color & 0xFF;
+                }
             }
         }
-        fill_rect(x + 5*scale, y, scale, 7 * scale, back_color);
+
+        set_address_window(x, y, x + 6*scale - 1, y + 7*scale - 1);
+        spi_mode::set_mode0(hspi_);
+        HAL_GPIO_WritePin(cs_port_, cs_pin_, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(dc_port_, dc_pin_, GPIO_PIN_SET);
+        HAL_SPI_Transmit(hspi_, buf, idx, HAL_MAX_DELAY);
+        HAL_GPIO_WritePin(cs_port_, cs_pin_, GPIO_PIN_SET);
+        spi_mode::set_mode1(hspi_);
     }
 
     void Touchscreen::draw_string(uint16_t x, uint16_t y, const char* str, uint16_t font_color, uint16_t back_color, uint8_t scale){
