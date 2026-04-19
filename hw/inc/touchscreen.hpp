@@ -87,6 +87,7 @@ namespace telescope {
             void write_data16(uint16_t data);
 
             void set_address_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1);
+            void set_window_raw(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1);
             void draw_pixel(uint16_t x, uint16_t y, uint16_t color);
             void fill_screen(uint16_t color);
             void fill_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color);

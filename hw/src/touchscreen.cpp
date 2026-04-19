@@ -96,16 +96,36 @@ namespace telescope{
         HAL_Delay(5);
     }
 
+    void Touchscreen::set_window_raw(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1){
+        uint8_t cmd;
+        uint8_t d[4];
+
+        cmd = 0x2A;
+        HAL_GPIO_WritePin(dc_port_, dc_pin_, GPIO_PIN_RESET);
+        HAL_SPI_Transmit(hspi_, &cmd, 1, HAL_MAX_DELAY);
+        d[0] = x0 >> 8; d[1] = x0 & 0xFF; d[2] = x1 >> 8; d[3] = x1 & 0xFF;
+        HAL_GPIO_WritePin(dc_port_, dc_pin_, GPIO_PIN_SET);
+        HAL_SPI_Transmit(hspi_, d, 4, HAL_MAX_DELAY);
+
+        cmd = 0x2B;
+        HAL_GPIO_WritePin(dc_port_, dc_pin_, GPIO_PIN_RESET);
+        HAL_SPI_Transmit(hspi_, &cmd, 1, HAL_MAX_DELAY);
+        d[0] = y0 >> 8; d[1] = y0 & 0xFF; d[2] = y1 >> 8; d[3] = y1 & 0xFF;
+        HAL_GPIO_WritePin(dc_port_, dc_pin_, GPIO_PIN_SET);
+        HAL_SPI_Transmit(hspi_, d, 4, HAL_MAX_DELAY);
+
+        cmd = 0x2C;
+        HAL_GPIO_WritePin(dc_port_, dc_pin_, GPIO_PIN_RESET);
+        HAL_SPI_Transmit(hspi_, &cmd, 1, HAL_MAX_DELAY);
+        HAL_GPIO_WritePin(dc_port_, dc_pin_, GPIO_PIN_SET);
+    }
+
     void Touchscreen::set_address_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1){
-        write_command(0x2A);
-        write_data16(x0);
-        write_data16(x1);
-
-        write_command(0x2B);
-        write_data16(y0);
-        write_data16(y1);
-
-        write_command(0x2C);
+        spi_mode::set_mode0(hspi_);
+        HAL_GPIO_WritePin(cs_port_, cs_pin_, GPIO_PIN_RESET);
+        set_window_raw(x0, y0, x1, y1);
+        HAL_GPIO_WritePin(cs_port_, cs_pin_, GPIO_PIN_SET);
+        spi_mode::set_mode1(hspi_);
     }
 
     void Touchscreen::display_on(){
@@ -201,8 +221,6 @@ namespace telescope{
         if((x+w-1) >= LCD_W) w = LCD_W - x;
         if((y+h-1) >= LCD_H) h = LCD_H - y;
 
-        set_address_window(x, y, x+w-1, y+h-1);
-
         static uint8_t data[2048];
         static uint16_t cached_color = 0xFFFF;
         if(color != cached_color){
@@ -213,11 +231,11 @@ namespace telescope{
             cached_color = color;
         }
 
-        uint32_t total_pixels = w * h;
         spi_mode::set_mode0(hspi_);
         HAL_GPIO_WritePin(cs_port_, cs_pin_, GPIO_PIN_RESET);
-        HAL_GPIO_WritePin(dc_port_, dc_pin_, GPIO_PIN_SET);
+        set_window_raw(x, y, x+w-1, y+h-1);
 
+        uint32_t total_pixels = w * h;
         while(total_pixels > 0){
             uint32_t chunk_pixels = (total_pixels > 1024) ? 1024 : total_pixels;
             HAL_SPI_Transmit(hspi_, data, chunk_pixels * 2, HAL_MAX_DELAY);
@@ -315,10 +333,9 @@ namespace telescope{
             }
         }
 
-        set_address_window(x, y, x + 6*scale - 1, y + 7*scale - 1);
         spi_mode::set_mode0(hspi_);
         HAL_GPIO_WritePin(cs_port_, cs_pin_, GPIO_PIN_RESET);
-        HAL_GPIO_WritePin(dc_port_, dc_pin_, GPIO_PIN_SET);
+        set_window_raw(x, y, x + 6*scale - 1, y + 7*scale - 1);
         HAL_SPI_Transmit(hspi_, buf, idx, HAL_MAX_DELAY);
         HAL_GPIO_WritePin(cs_port_, cs_pin_, GPIO_PIN_SET);
         spi_mode::set_mode1(hspi_);
