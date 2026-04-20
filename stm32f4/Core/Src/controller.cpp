@@ -311,9 +311,10 @@ namespace telescope {
                 HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t*>(buf), static_cast<uint16_t>(len), 100);
 
                 StateSyncPayload sync{};
-                sync.state    = static_cast<uint8_t>(state_machine.current_state());
-                sync.flags    = (touchscreen.get_selected_catalogue() == CatalogueType::NGC) ? 0x01 : 0x00;
-                sync.sequence = 0;
+                sync.state           = static_cast<uint8_t>(state_machine.current_state());
+                sync.flags           = (touchscreen.get_selected_catalogue() == CatalogueType::NGC) ? 0x01 : 0x00;
+                sync.overlay_visible = touchscreen.get_view_status() ? 1 : 0;
+                sync.sequence        = 0;
                 raspi.send_state_sync(sync);
             }
 
