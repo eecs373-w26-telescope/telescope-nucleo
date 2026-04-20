@@ -397,6 +397,14 @@ namespace telescope {
                 }
 
                 {
+                    const HorizontalCoordinates& hc = state_machine.current_hc();
+                    PointingPayload pp{};
+                    pp.alt = static_cast<int32_t>(hc.altitude * 3600000.0f);
+                    pp.az  = static_cast<int32_t>(hc.azimuth  * 3600000.0f);
+                    raspi.send_pointing(pp);
+                }
+
+                {
                     const FOV& fov = state_machine.current_fov();
                     FovObjectsPayload pkt{};
                     pkt.count = 0;
