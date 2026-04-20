@@ -172,6 +172,7 @@ private:
         
         // bit 0 of flags: 0=M, 1=N
         payload.flags = (touchscreen_.get_selected_catalogue() == CatalogueType::NGC) ? 0x01 : 0x00;
+        payload.overlay_visible = touchscreen_.get_view_status() ? 1 : 0;
         
         payload.sequence = state_sequence_++;
         raspi_.send_state_sync(payload);

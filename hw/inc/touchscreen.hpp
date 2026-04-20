@@ -68,7 +68,7 @@ namespace telescope {
             bool enter_ = false;
             char display_[8];
             int length_ = 0;
-            bool view_ = false;
+            bool view_ = true;
             int search_id_ = -1;
             bool search_ = false;
             bool main_ = false;

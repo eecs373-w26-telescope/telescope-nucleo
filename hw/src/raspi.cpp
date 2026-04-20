@@ -153,6 +153,7 @@ namespace telescope {
 
         tx_busy_ = true;
         HAL_UART_Transmit_DMA(uart_, tx_buf_, 6 + length);
+        HAL_Delay(1);
         return true;
     }
 
