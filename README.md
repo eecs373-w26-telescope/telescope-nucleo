@@ -19,12 +19,12 @@ Installs: cmake, build-essential, git
 
 ## Build and Flash
 Run the following command to build and flash the code. 
-* --src: stm32l4 is the path to where the src directory of STM32's main.c file is located
+* --src: stm32f4 is the path to where the src directory of STM32's main.c file is located
 * --preset: directs the compiler to compile the program with specific flags (mainly Debug or Release). Run with Debug for testing/debugging purposes, run with Release for performance and final product purposes
 * --flash: this parameter commands the script to flash the code to the connected NUCLEO
 
 ```bash
-./scripts/build_flash.sh --src stm32l4 --preset Debug --flash
+./scripts/build_flash.sh --src stm32f4 --preset Debug --flash
 ```
 
 ## Clean
