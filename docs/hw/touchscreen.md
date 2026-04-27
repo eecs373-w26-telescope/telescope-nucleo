@@ -1,5 +1,5 @@
 # Touchscreen over SPI implementation description
-The touchscreen module enables user interaction through a LCD display and a touch input. It supports numeric input, button control, and real-time display updates. The display is driven by ST7796 controller, while touch input is read through XPT2046 touch controller over SPI. 
+The touchscreen module enables user interaction through a LCD display and a touch input. It supports numeric input, button control, and real-time display updates. The display is driven by ST7796S controller, while touch input is read through XPT2046 touch controller over SPI. 
 
 ## Hardware Interface
 The LCD display and touch controller share a single SPI bus but use different CHIP SELECT lines. Apart from the SPI’s MOSI, MISO, SCK and the chipselects, the LCD has an RESET line and a backlight control (LED) line while the touch controller has an extra IRQ line to indicate when a touch is detected. 
